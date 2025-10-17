@@ -2,33 +2,13 @@
 
 namespace Taiwanleaftea\TltVerifactu\Support;
 
-use chillerlan\QRCode\QRCode;
-use chillerlan\QRCode\QROptions;
 use DOMException;
-use eseperio\verifactu\models\Breakdown;
-use eseperio\verifactu\models\BreakdownDetail;
-use eseperio\verifactu\models\Chaining;
-use eseperio\verifactu\models\ComputerSystem;
-use eseperio\verifactu\models\enums\GeneratorType;
-use eseperio\verifactu\models\enums\HashType;
-use eseperio\verifactu\models\enums\InvoiceType;
-use eseperio\verifactu\models\enums\OperationQualificationType;
-use eseperio\verifactu\models\enums\TaxType;
-use eseperio\verifactu\models\enums\YesNoType;
-use eseperio\verifactu\models\InvoiceCancellation;
-use eseperio\verifactu\models\InvoiceId;
-use eseperio\verifactu\models\InvoiceResponse;
-use eseperio\verifactu\models\InvoiceSubmission;
-use eseperio\verifactu\models\LegalPerson;
-use eseperio\verifactu\models\Recipient;
-use eseperio\verifactu\services\HashGeneratorService;
-use eseperio\verifactu\Verifactu as VerifactuLibrary;
 use Illuminate\Support\Carbon;
 use RuntimeException;
 use SoapFault;
-use Taiwanleaftea\TltVerifactu\Constants\AEAT;
 use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
 use Taiwanleaftea\TltVerifactu\Exceptions\RegisterInvoiceException;
+use Taiwanleaftea\TltVerifactu\Helpers\QRCode;
 
 class Verifactu
 {
@@ -65,8 +45,10 @@ class Verifactu
 
         $this->path = storage_path(config('tlt-verifactu.path'));
         $this->password = config('tlt-verifactu.password');
+        /*
         $this->type = config('tlt-verifactu.type-certificate') ? VerifactuLibrary::TYPE_CERTIFICATE : VerifactuLibrary::TYPE_SEAL;
         $this->environment = $this->isProduction ? VerifactuLibrary::ENVIRONMENT_PRODUCTION : VerifactuLibrary::ENVIRONMENT_SANDBOX;
+        */
 
         $this->systemName = config('tlt-verifactu.system_name');
         $this->providerName = config('tlt-verifactu.provider_name');
@@ -370,37 +352,6 @@ class Verifactu
         float $totalAmount,
     ): string
     {
-        $url = $this->buildUrl($issuerNIF, $invoiceDate, $number, $totalAmount);
-
-        $options = new QROptions();
-        $options->version      = 7;
-        $options->outputBase64 = false; // output raw image instead of base64 data URI
-
-        return (new QRCode($options))->render($url);
-    }
-
-    /**
-     * @param string $issuerNIF
-     * @param Carbon $invoiceDate
-     * @param string $number
-     * @param float $totalAmount
-     * @return string
-     */
-    private function buildUrl(
-        string $issuerNIF,
-        Carbon $invoiceDate,
-        string $number,
-        float $totalAmount,
-    ): string
-    {
-        $url = $this->isProduction ? AEAT::QR_VERIFICATION_PRODUCTION : AEAT::QR_VERIFICATION_SANDBOX;
-        $query = http_build_query([
-            'nif' => $issuerNIF,
-            'numserie' => $number,
-            'fecha' => $invoiceDate->format('d-m-Y'),
-            'importe' => number_format($totalAmount, 2, '.', ''),
-        ]);
-
-        return $url . $query;
+        return QRCode::SVG($issuerNIF, $invoiceDate, $number, $totalAmount, $this->isProduction);
     }
 }
