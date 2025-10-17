@@ -1,2 +1,2 @@
 # TLT Verifactu
-Laravel wrapper for Verifactu library
+Laravel library for EU VAT validation and VERIFACTU support

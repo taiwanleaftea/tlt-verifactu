@@ -1,0 +1,27 @@
+<?php
+
+namespace Taiwanleaftea\TltVerifactu\Helpers;
+
+use SoapClient;
+use SoapFault;
+use Taiwanleaftea\TltVerifactu\Exceptions\SoapClientException;
+
+class Soap
+{
+    /**
+     * @param string $wsdl
+     * @param array $options
+     * @return SoapClient
+     * @throws SoapClientException
+     */
+    public function createClient(string $wsdl, array $options = []): SoapClient
+    {
+        try {
+            $client = new SoapClient($wsdl, $options);
+        } catch (SoapFault $e) {
+            throw new SoapClientException('SOAP connection fault: ' . $e->getMessage());
+        }
+
+        return $client;
+    }
+}
