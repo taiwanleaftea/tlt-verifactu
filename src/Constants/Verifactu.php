@@ -2,7 +2,7 @@
 
 namespace Taiwanleaftea\TltVerifactu\Constants;
 
-class AEAT
+class Verifactu
 {
     /*
      * VERIFACTU Service
@@ -20,14 +20,24 @@ class AEAT
      * XSD namespaces
      */
     // SuministroInformacion.xsd namespace
-    public const SINF_NAMESPACE = 'https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroInformacion.xsd';
+    public const string SF_NAMESPACE = 'https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroInformacion.xsd';
 
     // SuministroLR.xsd namespace
-    public const SLR_NAMESPACE = 'https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroLR.xsd';
+    public const string SLR_NAMESPACE = 'https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroLR.xsd';
 
     // ConsultaLR.xsd namespace
-    public const CONS_NAMESPACE = 'https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/ConsultaLR.xsd';
+    public const string CONS_NAMESPACE = 'https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/ConsultaLR.xsd';
 
     // XML Digital Signature namespace
-    public const DS_NAMESPACE = 'http://www.w3.org/2000/09/xmldsig#';
+    public const string DS_NAMESPACE = 'http://www.w3.org/2000/09/xmldsig#';
+
+    // VERIFACTU version id
+    public const string VERSION = '1.0';
+
+    // Yes/No
+    public const string YES = 'S';
+    public const string NO = 'N';
+
+    // Hash type
+    public const string SHA_256 = '01';
 }
