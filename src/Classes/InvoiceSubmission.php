@@ -29,8 +29,7 @@ class InvoiceSubmission extends Invoice
     public ExemptOperationType $exemptOperation;
 
     public function __construct(
-        string $issuerNif,
-        string $issuerName,
+        LegalPerson $issuer,
         string $invoiceNumber,
         Carbon $invoiceDate,
         string $description,
@@ -42,8 +41,7 @@ class InvoiceSubmission extends Invoice
         Carbon $timestamp,
     )
     {
-        $this->issuerNif = Str::trim($issuerNif);
-        $this->issuerName = Str::trim($issuerName);
+        $this->issuer = $issuer;
         $this->invoiceNumber = Str::trim($invoiceNumber);
         $this->invoiceDate = $invoiceDate;
         $this->description = Str::trim($description);
@@ -199,7 +197,7 @@ class InvoiceSubmission extends Invoice
     public function hash(string $timestamp = null): string
     {
         $parts = [
-            'IDEmisorFactura=' . $this->issuerNif,
+            'IDEmisorFactura=' . $this->issuer->id,
             'NumSerieFactura=' . $this->invoiceNumber,
             'FechaExpedicionFactura=' . $this->invoiceDate->format('d-m-Y'),
             'TipoFactura=' . $this->invoiceType->value,

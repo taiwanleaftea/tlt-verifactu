@@ -6,60 +6,40 @@ namespace Taiwanleaftea\TltVerifactu\Classes;
 
 use Illuminate\Support\Str;
 use Taiwanleaftea\TltVerifactu\Constants\Verifactu;
-use Taiwanleaftea\TltVerifactu\Enums\IdType;
 
 /**
  * Datos del sistema informático de facturación utilizado.
  */
-class Provider
+class InformationSystem
 {
-    public string $providerName;
-    public string $providerId;
-    public string $countryCode;
-    public IdType $idType;
-    public string $systemName;
-    public string $systemId;
-    public string $systemVersion;
+    public LegalPerson $provider;
+    public string $name;
+    public string $id;
+    public string $version;
     public int $installationNumber;
     public bool $verifactuOnly;
     public bool $multipleTaxpayers;
     public bool $singleTaxpayerMode;
 
     public function __construct(
-        string $providerName,
-        string $providerId,
-        string $countryCode,
-        IdType $idType,
-        string $systemName,
-        string $systemId,
-        string $systemVersion,
+        LegalPerson $provider,
+        string $name,
+        string $id,
+        string $version,
         int $installationNumber,
         bool $verifactuOnly,
         bool $multipleTaxpayers,
         bool $singleTaxpayerMode
     )
     {
-        $this->providerName = Str::trim($providerName);
-        $this->providerId = Str::trim($providerId);
-        $this->countryCode = Str::of($countryCode)->trim()->upper()->toString();
-        $this->idType = $idType;
-        $this->systemName = Str::trim($systemName);
-        $this->systemId = Str::trim($systemId);
-        $this->systemVersion = Str::trim($systemVersion);
+        $this->provider = $provider;
+        $this->name = Str::trim($name);
+        $this->id = Str::trim($id);
+        $this->version = Str::trim($version);
         $this->installationNumber = $installationNumber;
         $this->verifactuOnly = $verifactuOnly;
         $this->multipleTaxpayers = $multipleTaxpayers;
         $this->singleTaxpayerMode = $singleTaxpayerMode;
-    }
-
-    /**
-     * Check if provider is domestic
-     *
-     * @return bool
-     */
-    public function isDomestic(): bool
-    {
-        return $this->countryCode == 'ES';
     }
 
     /**

@@ -14,8 +14,8 @@ class RecipientTest extends TestCase
         $this->expectException(RecipientException::class);
         new Recipient(
             'Recipient Name',
-            'DE',
             '',
+            'DE',
             IdType::NIF
         );
     }
@@ -24,8 +24,8 @@ class RecipientTest extends TestCase
     {
         $recipient = new Recipient(
             'Recipient Name',
-            'ES',
             '89890001K',
+            'ES',
             IdType::NIF
         );
 
@@ -36,8 +36,8 @@ class RecipientTest extends TestCase
     {
         $recipient = new Recipient(
             'Recipient Name',
-            'DE',
             '89890001K',
+            'DE',
             IdType::NIF
         );
 

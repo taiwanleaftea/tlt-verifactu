@@ -6,26 +6,30 @@ namespace Taiwanleaftea\TltVerifactu\Helpers;
 
 use DOMDocument;
 use Taiwanleaftea\TltVerifactu\Classes\InvoiceSubmission;
-use Taiwanleaftea\TltVerifactu\Classes\Provider;
+use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
 use Taiwanleaftea\TltVerifactu\Constants\Verifactu;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
-use Taiwanleaftea\TltVerifactu\Traits\BuildProvider;
+use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
+use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
+use Taiwanleaftea\TltVerifactu\Traits\BuildInformationSystem;
+use Taiwanleaftea\TltVerifactu\Traits\EnvelopeXml;
+use Taiwanleaftea\TltVerifactu\Traits\SignXml;
 
 class SubmitInvoice
 {
-    use BuildProvider;
+    use BuildInformationSystem, SignXml, EnvelopeXml;
 
     /**
      * Generate Invoice submission XML
      *
      * @param InvoiceSubmission $invoice
-     * @param Provider $provider
+     * @param VerifactuSettings $settings
      * @return DOMDocument
+     * @throws InvoiceValidationException
+     * @throws RecipientException
      * @throws \DOMException
-     * @throws \Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException
-     * @throws \Taiwanleaftea\TltVerifactu\Exceptions\RecipientException
      */
-    public static function getXml(InvoiceSubmission $invoice, Provider $provider): DOMDocument
+    public static function getXml(InvoiceSubmission $invoice, VerifactuSettings $settings): DOMDocument
     {
         $namespace = Verifactu::SF_NAMESPACE;
         $dom = new DOMDocument('1.0', 'utf-8');
@@ -41,7 +45,7 @@ class SubmitInvoice
         // IDFactura, required
         $idFactura = $dom->createElementNS($namespace, 'sf:IDFactura');
         $registroAlta->appendChild($idFactura);
-        $idFactura->appendChild($dom->createElementNS($namespace, 'sf:IDEmisorFactura', $invoice->issuerNif));
+        $idFactura->appendChild($dom->createElementNS($namespace, 'sf:IDEmisorFactura', $invoice->issuer->id));
         $idFactura->appendChild($dom->createElementNS($namespace, 'sf:NumSerieFactura', $invoice->invoiceNumber));
         $idFactura->appendChild($dom->createElementNS($namespace, 'sf:FechaExpedicionFactura', $invoice->getDate()));
 
@@ -51,7 +55,7 @@ class SubmitInvoice
         }
 
         // NombreRazonEmisor, required
-        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:NombreRazonEmisor', $invoice->issuerName));
+        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:NombreRazonEmisor', $invoice->issuer->name));
 
         // TipoFactura, required
         $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:TipoFactura', $invoice->invoiceType->value));
@@ -145,7 +149,7 @@ class SubmitInvoice
             $registroAnterior->appendChild($dom->createElementNS($namespace, 'sf:Huella', $previousInvoice['hash']));
         }
 
-        $sistemaInformatico = self::buildProvider($dom, $namespace, $provider);
+        $sistemaInformatico = self::buildInformationSystem($dom, $namespace, $settings->getInformationSystem());
 
         if ($sistemaInformatico !== false) {
             $registroAlta->appendChild($sistemaInformatico);

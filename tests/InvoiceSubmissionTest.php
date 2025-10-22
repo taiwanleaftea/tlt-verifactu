@@ -8,8 +8,10 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Orchestra\Testbench\TestCase;
 use Taiwanleaftea\TltVerifactu\Classes\InvoiceSubmission;
-use Taiwanleaftea\TltVerifactu\Classes\Provider;
+use Taiwanleaftea\TltVerifactu\Classes\InformationSystem;
+use Taiwanleaftea\TltVerifactu\Classes\LegalPerson;
 use Taiwanleaftea\TltVerifactu\Classes\Recipient;
+use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
 use Taiwanleaftea\TltVerifactu\Constants\Verifactu;
 use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
@@ -19,23 +21,20 @@ use Taiwanleaftea\TltVerifactu\Helpers\SubmitInvoice;
 class InvoiceSubmissionTest extends TestCase
 {
     private $xsd;
-    private string $providerName = 'Software Ltd.';
-    private string $providerId = '89890001K';
-    private string $systemName = 'Invoicing Software';
-    private string $systemId = '01';
-    private string $systemVersion = '1.0';
-    private int $installationNumber = 10;
-    private bool $verifactuOnly  = false;
-    private bool $multipleTaxpayers = true;
-    private bool $singleTaxpayerMode = false;
     private string $recipientName = 'Buyer Inc.';
     private string $recipientId = '12345678L';
 
     public function testStandardESRecipientESProvider()
     {
-        $invoice = new InvoiceSubmission(
-            '89890001K',
+        $settings = new VerifactuSettings();
+
+        $issuer = new LegalPerson(
             'Issuer Name',
+            '89890001K',
+        );
+
+        $invoice = new InvoiceSubmission(
+            $issuer,
             '12345678/G33',
             Carbon::createFromFormat('d-m-Y', '01-01-2024'),
             'Description',
@@ -47,40 +46,32 @@ class InvoiceSubmissionTest extends TestCase
             Carbon::now()
         );
 
-        $provider = new Provider(
-            $this->providerName,
-            $this->providerId,
-            'ES',
-            IdType::NIF,
-            $this->systemName,
-            $this->systemId,
-            $this->systemVersion,
-            $this->installationNumber,
-            $this->verifactuOnly,
-            $this->multipleTaxpayers,
-            $this->singleTaxpayerMode,
-        );
-
         $recipient = new Recipient(
             $this->recipientName,
-            'ES',
             $this->recipientId,
+            'ES',
             IdType::NIF
         );
 
         $invoice->setRecipient($recipient);
         $invoice->setOperationQualification(OperationQualificationType::SUBJECT_DIRECT);
 
-        $dom = SubmitInvoice::getXml($invoice, $provider);
+        $dom = SubmitInvoice::getXml($invoice, $settings);
         $validation = $this->validateXml($dom);
         $this->assertTrue($validation['result'], 'XML StandardESRecipientESProvider validation failed.' . PHP_EOL . $validation['errors']);
     }
 
     public function testSimplifiedESProvider()
     {
-        $invoice = new InvoiceSubmission(
-            '89890001K',
+        $settings = new VerifactuSettings();
+
+        $issuer = new LegalPerson(
             'Issuer Name',
+            '89890001K',
+        );
+
+        $invoice = new InvoiceSubmission(
+            $issuer,
             '12345678/G33',
             Carbon::createFromFormat('d-m-Y', '01-01-2024'),
             'Description',
@@ -92,32 +83,24 @@ class InvoiceSubmissionTest extends TestCase
             Carbon::now()
         );
 
-        $provider = new Provider(
-            $this->providerName,
-            $this->providerId,
-            'ES',
-            IdType::NIF,
-            $this->systemName,
-            $this->systemId,
-            $this->systemVersion,
-            $this->installationNumber,
-            $this->verifactuOnly,
-            $this->multipleTaxpayers,
-            $this->singleTaxpayerMode,
-        );
-
         $invoice->setOperationQualification(OperationQualificationType::SUBJECT_DIRECT);
 
-        $dom = SubmitInvoice::getXml($invoice, $provider);
+        $dom = SubmitInvoice::getXml($invoice, $settings);
         $validation = $this->validateXml($dom);
         $this->assertTrue($validation['result'], 'XML testSimplifiedESProvider validation failed.' . PHP_EOL . $validation['errors']);
     }
 
     public function testStandardNONESRecipientNONESProvider()
     {
-        $invoice = new InvoiceSubmission(
-            '89890001K',
+        $settings = new VerifactuSettings();
+
+        $issuer = new LegalPerson(
             'Issuer Name',
+            '89890001K',
+        );
+
+        $invoice = new InvoiceSubmission(
+            $issuer,
             '12345678/G33',
             Carbon::createFromFormat('d-m-Y', '01-01-2024'),
             'Description',
@@ -129,31 +112,17 @@ class InvoiceSubmissionTest extends TestCase
             Carbon::now()
         );
 
-        $provider = new Provider(
-            $this->providerName,
-            $this->providerId,
-            'DE',
-            IdType::NIF,
-            $this->systemName,
-            $this->systemId,
-            $this->systemVersion,
-            $this->installationNumber,
-            $this->verifactuOnly,
-            $this->multipleTaxpayers,
-            $this->singleTaxpayerMode,
-        );
-
         $recipient = new Recipient(
             $this->recipientName,
-            'AT',
             $this->recipientId,
+            'AT',
             IdType::NATIONAL_ID
         );
 
         $invoice->setRecipient($recipient);
         $invoice->setOperationQualification(OperationQualificationType::SUBJECT_DIRECT);
 
-        $dom = SubmitInvoice::getXml($invoice, $provider);
+        $dom = SubmitInvoice::getXml($invoice, $settings);
         $validation = $this->validateXml($dom);
         $this->assertTrue($validation['result'], 'XML testStandardNONESRecipientNONESProvider validation failed.' . PHP_EOL . $validation['errors']);
     }

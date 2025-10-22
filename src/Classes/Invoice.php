@@ -9,8 +9,7 @@ use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
 
 abstract class Invoice
 {
-    public string $issuerNif;
-    public string $issuerName;
+    public LegalPerson $issuer;
     public string $invoiceNumber;
     public string $externalReference;
     public Carbon $invoiceDate;

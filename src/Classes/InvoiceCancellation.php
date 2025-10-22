@@ -13,15 +13,13 @@ class InvoiceCancellation extends Invoice
     protected string $invoiceHash;
 
     public function __construct(
-        string $issuerNif,
-        string $issuerName,
+        LegalPerson $issuer,
         string $invoiceNumber,
         Carbon $invoiceDate,
         string $invoiceHash = ''
     )
     {
-        $this->issuerNif = Str::trim($issuerNif);
-        $this->issuerName = Str::trim($issuerName);
+        $this->issuer = $issuer;
         $this->invoiceNumber = Str::trim($invoiceNumber);
         $this->invoiceDate = $invoiceDate;
         $this->invoiceHash = $invoiceHash;
@@ -35,7 +33,7 @@ class InvoiceCancellation extends Invoice
     public function hash(string $timestamp = null): string
     {
         $parts = [
-            'IDEmisorFacturaAnulada=' . $this->issuerNif,
+            'IDEmisorFacturaAnulada=' . $this->issuer->id,
             'NumSerieFacturaAnulada=' . $this->invoiceNumber,
             'FechaExpedicionFacturaAnulada=' . $this->invoiceDate->format('d-m-Y'),
             'Huella=' . $this->invoiceHash,
