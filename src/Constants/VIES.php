@@ -2,7 +2,7 @@
 
 namespace Taiwanleaftea\TltVerifactu\Constants;
 
-class EU
+class VIES
 {
     /*
      * EU VIES Service

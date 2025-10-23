@@ -8,7 +8,7 @@ use SoapFault;
 use Illuminate\Support\Str;
 use Taiwanleaftea\TltVerifactu\Classes\Response;
 use Taiwanleaftea\TltVerifactu\Helpers\Soap;
-use Taiwanleaftea\TltVerifactu\Constants\EU;
+use Taiwanleaftea\TltVerifactu\Constants\VIES;
 use Taiwanleaftea\TltVerifactu\Exceptions\SoapClientException;
 use Taiwanleaftea\TltVerifactu\Helpers\Vat;
 
@@ -36,7 +36,7 @@ class VatValidator
         $soap = new Soap();
 
         try {
-            $client = $soap->createClient(EU::EU_VAT_API_URL . EU::EU_VAT_WSDL_ENDPOINT);
+            $client = $soap->createClient(VIES::EU_VAT_API_URL . VIES::EU_VAT_WSDL_ENDPOINT);
         } catch (SoapClientException $e) {
             $errors[] = $e->getMessage();
         }
@@ -83,12 +83,19 @@ class VatValidator
     }
 
     /**
+     * Sanitize VAT string
+     *
      * @param string $country
      * @param string $vatNumber
+     * @param bool $removeCountry
      * @return string
      */
-    public function sanitize(string $country, string $vatNumber): string
+    public function sanitize(string $country, string $vatNumber, bool $removeCountry = false): string
     {
-        return Str::of($vatNumber)->trim()->replace([$country, ' ', '.', '-', '_'], '', false)->upper();
+        if ($removeCountry) {
+            return Str::of($vatNumber)->trim()->replace([$country, ' ', '.', '-', '_'], '', false)->upper()->toString();
+        } else {
+            return Str::of($vatNumber)->trim()->replace([' ', '.', '-', '_'], '', false)->upper()->toString();
+        }
     }
 }
