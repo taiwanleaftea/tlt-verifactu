@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Taiwanleaftea\TltVerifactu\Classes;
 
-use Taiwanleaftea\TltVerifactu\Constants\Verifactu;
+use Taiwanleaftea\TltVerifactu\Constants\AEAT;
 use Taiwanleaftea\TltVerifactu\Enums\IdType;
 
 class VerifactuSettings
@@ -64,7 +64,7 @@ class VerifactuSettings
      */
     public function getVerifactuServiceUrl(): string
     {
-        return $this->production ? Verifactu::URL_PRODUCTION : Verifactu::URL_SANDBOX;
+        return $this->production ? AEAT::URL_PRODUCTION : AEAT::URL_SANDBOX;
     }
 
     /**
@@ -74,6 +74,6 @@ class VerifactuSettings
      */
     public function getQrCheckUrl(): string
     {
-        return $this->production ? Verifactu::QR_VERIFICATION_PRODUCTION : Verifactu::QR_VERIFICATION_SANDBOX;
+        return $this->production ? AEAT::QR_VERIFICATION_PRODUCTION : AEAT::QR_VERIFICATION_SANDBOX;
     }
 }

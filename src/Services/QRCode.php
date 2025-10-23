@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Taiwanleaftea\TltVerifactu\Helpers;
+namespace Taiwanleaftea\TltVerifactu\Services;
 
 use chillerlan\QRCode\QRCode as QRCodeRender;
 use chillerlan\QRCode\QROptions;
 use Illuminate\Support\Carbon;
-use Taiwanleaftea\TltVerifactu\Constants\Verifactu;
+use Taiwanleaftea\TltVerifactu\Constants\AEAT;
 
 class QRCode
 {
@@ -50,7 +50,7 @@ class QRCode
         bool $isProduction = false
     ): string
     {
-        $url = $isProduction ? Verifactu::QR_VERIFICATION_PRODUCTION : Verifactu::QR_VERIFICATION_SANDBOX;
+        $url = $isProduction ? AEAT::QR_VERIFICATION_PRODUCTION : AEAT::QR_VERIFICATION_SANDBOX;
         $query = http_build_query([
             'nif' => $issuerNIF,
             'numserie' => $number,

@@ -7,10 +7,10 @@ namespace Taiwanleaftea\TltVerifactu\Support;
 use SoapFault;
 use Illuminate\Support\Str;
 use Taiwanleaftea\TltVerifactu\Classes\Response;
-use Taiwanleaftea\TltVerifactu\Helpers\Soap;
+use Taiwanleaftea\TltVerifactu\Services\Soap;
 use Taiwanleaftea\TltVerifactu\Constants\VIES;
 use Taiwanleaftea\TltVerifactu\Exceptions\SoapClientException;
-use Taiwanleaftea\TltVerifactu\Helpers\Vat;
+use Taiwanleaftea\TltVerifactu\Services\Vat;
 
 class VatValidator
 {

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Taiwanleaftea\TltVerifactu\Classes;
 
-use Taiwanleaftea\TltVerifactu\Constants\EU;
+use Taiwanleaftea\TltVerifactu\Constants\VIES;
 use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
 
@@ -19,7 +19,7 @@ class Recipient extends LegalPerson
      */
     public function __construct(string $name, string $id, string $countryCode, IdType $idType)
     {
-        if (!$id && in_array($countryCode, EU::MEMBERS)) {
+        if (!$id && in_array($countryCode, VIES::MEMBERS)) {
             throw new RecipientException('VAT ID required for the country ' . $countryCode);
         }
 

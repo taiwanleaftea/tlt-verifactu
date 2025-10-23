@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Taiwanleaftea\TltVerifactu\Helpers;
+namespace Taiwanleaftea\TltVerifactu\Services;
 
 use DOMDocument;
 use Taiwanleaftea\TltVerifactu\Classes\InvoiceSubmission;
 use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
-use Taiwanleaftea\TltVerifactu\Constants\Verifactu;
+use Taiwanleaftea\TltVerifactu\Constants\AEAT;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
 use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
@@ -31,7 +31,7 @@ class SubmitInvoice
      */
     public static function getXml(InvoiceSubmission $invoice, VerifactuSettings $settings): DOMDocument
     {
-        $namespace = Verifactu::SF_NAMESPACE;
+        $namespace = AEAT::SF_NAMESPACE;
         $dom = new DOMDocument('1.0', 'utf-8');
         $dom->formatOutput = true;
 
@@ -40,7 +40,7 @@ class SubmitInvoice
         $dom->appendChild($registroAlta);
 
         // IDVersion, required
-        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:IDVersion', Verifactu::VERSION));
+        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:IDVersion', AEAT::VERSION));
 
         // IDFactura, required
         $idFactura = $dom->createElementNS($namespace, 'sf:IDFactura');
@@ -65,9 +65,9 @@ class SubmitInvoice
 
         // FacturaSimplificadaArt7273
         if ($invoice->invoiceType == InvoiceType::SIMPLIFIED) {
-            $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:FacturaSimplificadaArt7273', Verifactu::YES));
+            $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:FacturaSimplificadaArt7273', AEAT::YES));
         } else {
-            $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:FacturaSimplificadaArt7273', Verifactu::NO));
+            $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:FacturaSimplificadaArt7273', AEAT::NO));
 
             // Destinatario
             $destinatarios = $dom->createElementNS($namespace, 'sf:Destinatarios');
@@ -136,7 +136,7 @@ class SubmitInvoice
 
         if ($invoice->isFirstInvoice()) {
             // PrimerRegistro
-            $encadenamiento->appendChild($dom->createElementNS($namespace, 'sf:PrimerRegistro', Verifactu::YES));
+            $encadenamiento->appendChild($dom->createElementNS($namespace, 'sf:PrimerRegistro', AEAT::YES));
         } else {
             // RegistroAnterior
             $previousInvoice = $invoice->getPreviousInvoice();
@@ -159,7 +159,7 @@ class SubmitInvoice
         $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:FechaHoraHusoGenRegistro', (string) $invoice->getTimestamp()));
 
         // TipoHuella
-        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:TipoHuella', Verifactu::SHA_256));
+        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:TipoHuella', AEAT::SHA_256));
 
         // Huella
         $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:Huella', $invoice->hash()));

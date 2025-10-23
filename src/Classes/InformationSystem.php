@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Taiwanleaftea\TltVerifactu\Classes;
 
 use Illuminate\Support\Str;
-use Taiwanleaftea\TltVerifactu\Constants\Verifactu;
+use Taiwanleaftea\TltVerifactu\Constants\AEAT;
 
 /**
  * Datos del sistema informático de facturación utilizado.
@@ -49,7 +49,7 @@ class InformationSystem
      */
     public function getVerifactuOnly(): string
     {
-        return $this->verifactuOnly ? Verifactu::YES : Verifactu::NO;
+        return $this->verifactuOnly ? AEAT::YES : AEAT::NO;
     }
 
     /**
@@ -59,7 +59,7 @@ class InformationSystem
      */
     public function getMultipleTaxpayers(): string
     {
-        return $this->multipleTaxpayers ? Verifactu::YES : Verifactu::NO;
+        return $this->multipleTaxpayers ? AEAT::YES : AEAT::NO;
     }
 
     /**
@@ -69,6 +69,6 @@ class InformationSystem
      */
     public function getSingleTaxpayerMode(): string
     {
-        return $this->singleTaxpayerMode ?  Verifactu::NO : Verifactu::YES;
+        return $this->singleTaxpayerMode ?  AEAT::NO : AEAT::YES;
     }
 }

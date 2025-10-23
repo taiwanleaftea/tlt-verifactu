@@ -2,7 +2,7 @@
 
 namespace Taiwanleaftea\TltVerifactu\Constants;
 
-class Verifactu
+class AEAT
 {
     /*
      * VERIFACTU Service

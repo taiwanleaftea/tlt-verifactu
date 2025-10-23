@@ -10,7 +10,7 @@ use RuntimeException;
 use SoapFault;
 use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
 use Taiwanleaftea\TltVerifactu\Exceptions\RegisterInvoiceException;
-use Taiwanleaftea\TltVerifactu\Helpers\QRCode;
+use Taiwanleaftea\TltVerifactu\Services\QRCode;
 
 class Verifactu
 {

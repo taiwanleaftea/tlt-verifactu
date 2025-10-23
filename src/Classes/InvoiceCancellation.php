@@ -25,11 +25,6 @@ class InvoiceCancellation extends Invoice
         $this->invoiceHash = $invoiceHash;
     }
 
-    public function get()
-    {
-        // TODO: Implement get() method.
-    }
-
     public function hash(string $timestamp = null): string
     {
         $parts = [

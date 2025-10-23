@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Taiwanleaftea\TltVerifactu\Helpers;
+namespace Taiwanleaftea\TltVerifactu\Services;
 
 use SoapClient;
 use SoapFault;

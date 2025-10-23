@@ -12,11 +12,11 @@ use Taiwanleaftea\TltVerifactu\Classes\InvoiceSubmission;
 use Taiwanleaftea\TltVerifactu\Classes\LegalPerson;
 use Taiwanleaftea\TltVerifactu\Classes\Recipient;
 use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
-use Taiwanleaftea\TltVerifactu\Constants\Verifactu;
+use Taiwanleaftea\TltVerifactu\Constants\AEAT;
 use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
-use Taiwanleaftea\TltVerifactu\Helpers\SubmitInvoice;
+use Taiwanleaftea\TltVerifactu\Services\SubmitInvoice;
 
 #[CoversClass(InvoiceSubmission::class)]
 class InvoiceSubmissionTest extends TestCase
@@ -132,7 +132,7 @@ class InvoiceSubmissionTest extends TestCase
     {
         libxml_use_internal_errors(true);
         $errors = '';
-        $validation = $dom->schemaValidateSource($this->getXSD(Verifactu::SF_NAMESPACE));
+        $validation = $dom->schemaValidateSource($this->getXSD(AEAT::SF_NAMESPACE));
         if ($validation === false) {
             foreach (libxml_get_errors() as $error) {
                 $errors .= $error->message . PHP_EOL;
