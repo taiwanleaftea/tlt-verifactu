@@ -2,11 +2,13 @@
 
 namespace Taiwanleaftea\TltVerifactu\Test;
 
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Taiwanleaftea\TltVerifactu\Classes\Recipient;
 use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
 
+#[CoversClass(Recipient::class)]
 class RecipientTest extends TestCase
 {
     public function testCreateEURecipientWithoutID()

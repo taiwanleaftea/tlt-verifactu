@@ -3,12 +3,15 @@
 namespace Taiwanleaftea\TltVerifactu\Test;
 
 use Illuminate\Support\Carbon;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Taiwanleaftea\TltVerifactu\Classes\InvoiceCancellation;
 use Taiwanleaftea\TltVerifactu\Classes\InvoiceSubmission;
 use Taiwanleaftea\TltVerifactu\Classes\LegalPerson;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 
+#[CoversClass(InvoiceSubmission::class)]
+#[CoversClass(InvoiceCancellation::class)]
 class HashGeneratorTest extends TestCase
 {
     public function testSubmission()

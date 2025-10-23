@@ -7,8 +7,8 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Orchestra\Testbench\TestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 use Taiwanleaftea\TltVerifactu\Classes\InvoiceSubmission;
-use Taiwanleaftea\TltVerifactu\Classes\InformationSystem;
 use Taiwanleaftea\TltVerifactu\Classes\LegalPerson;
 use Taiwanleaftea\TltVerifactu\Classes\Recipient;
 use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
@@ -18,6 +18,7 @@ use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
 use Taiwanleaftea\TltVerifactu\Helpers\SubmitInvoice;
 
+#[CoversClass(InvoiceSubmission::class)]
 class InvoiceSubmissionTest extends TestCase
 {
     private $xsd;
