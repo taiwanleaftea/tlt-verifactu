@@ -33,10 +33,8 @@ class VatValidator
             return $response;
         }
 
-        $soap = new Soap();
-
         try {
-            $client = $soap->createClient(VIES::EU_VAT_API_URL . VIES::EU_VAT_WSDL_ENDPOINT);
+            $client = Soap::createClient(VIES::EU_VAT_API_URL . VIES::EU_VAT_WSDL_ENDPOINT);
         } catch (SoapClientException $e) {
             $errors[] = $e->getMessage();
         }

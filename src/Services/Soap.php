@@ -16,7 +16,7 @@ class Soap
      * @return SoapClient
      * @throws SoapClientException
      */
-    public function createClient(string $wsdl, array $options = []): SoapClient
+    public static function createClient(string $wsdl, array $options = []): SoapClient
     {
         try {
             $client = new SoapClient($wsdl, $options);
