@@ -10,42 +10,42 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
 enum InvoiceType: string
 {
     /**
-     * Standard invoice (Art. 6, 7.2 and 7.3 of RD 1619/2012).
+     * Factura (art. 6, 7.2 y 7.3 del RD 1619/2012)
      */
     case STANDARD = 'F1';
 
     /**
-     * Simplified invoice and invoices without recipient identification (Art. 6.1.d of RD 1619/2012).
+     * Factura Simplificada y Facturas sin identificación del destinatario art. 6.1.d) RD 1619/2012
      */
     case SIMPLIFIED = 'F2';
 
     /**
-     * Invoice issued to replace previously declared simplified invoices.
+     * Factura emitida en sustitución de facturas simplificadas facturadas y declaradas
      */
     case REPLACEMENT = 'F3';
 
     /**
-     * Rectification invoice (Art. 80.1, 80.2 and error based on law).
+     * Factura Rectificativa (Error fundado en derecho y Art. 80 Uno Dos y Seis LIVA)
      */
     case RECTIFICATION_1 = 'R1';
 
     /**
-     * Rectification invoice (Art. 80.3).
+     * Factura Rectificativa (Art. 80.3)
      */
     case RECTIFICATION_2 = 'R2';
 
     /**
-     * Rectification invoice (Art. 80.4).
+     * Factura Rectificativa (Art. 80.4)
      */
     case RECTIFICATION_3 = 'R3';
 
     /**
-     * Rectification invoice (Other cases).
+     * Factura Rectificativa (Resto)
      */
     case RECTIFICATION_4 = 'R4';
 
     /**
-     * Rectification invoice for simplified invoices.
+     * Factura Rectificativa en facturas simplificadas
      */
     case RECTIFICATION_SIMPLIFIED = 'R5';
 }

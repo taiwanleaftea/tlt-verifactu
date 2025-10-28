@@ -16,13 +16,15 @@ class InvoiceCancellation extends Invoice
         LegalPerson $issuer,
         string $invoiceNumber,
         Carbon $invoiceDate,
-        string $invoiceHash = ''
+        string $invoiceHash = '',
+        Carbon $timestamp = null,
     )
     {
         $this->issuer = $issuer;
         $this->invoiceNumber = Str::trim($invoiceNumber);
         $this->invoiceDate = $invoiceDate;
         $this->invoiceHash = $invoiceHash;
+        $this->timestamp = $timestamp ?? Carbon::now();
     }
 
     public function hash(string $timestamp = null): string

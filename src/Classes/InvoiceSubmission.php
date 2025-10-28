@@ -16,7 +16,7 @@ use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
 
 class InvoiceSubmission extends Invoice
 {
-    public InvoiceType $invoiceType;
+    public InvoiceType $type;
     public string $description;
     public float $taxRate;
     protected float $taxableBase;
@@ -33,24 +33,24 @@ class InvoiceSubmission extends Invoice
         string $invoiceNumber,
         Carbon $invoiceDate,
         string $description,
-        InvoiceType $invoiceType,
+        InvoiceType $type,
         float $taxRate,
         float $taxableBase,
         float $taxAmount,
         float $totalAmount,
-        Carbon $timestamp,
+        Carbon $timestamp = null,
     )
     {
         $this->issuer = $issuer;
         $this->invoiceNumber = Str::trim($invoiceNumber);
         $this->invoiceDate = $invoiceDate;
         $this->description = Str::trim($description);
-        $this->invoiceType = $invoiceType;
+        $this->type = $type;
         $this->taxRate = $taxRate;
         $this->taxableBase = $taxableBase;
         $this->taxAmount = $taxAmount;
         $this->totalAmount = $totalAmount;
-        $this->timestamp = $timestamp;
+        $this->timestamp = $timestamp ?? Carbon::now();
     }
 
     /**
@@ -179,7 +179,7 @@ class InvoiceSubmission extends Invoice
      */
     public function getOperationQualification(): string
     {
-        if ($this->invoiceType == InvoiceType::SIMPLIFIED) {
+        if ($this->type == InvoiceType::SIMPLIFIED) {
             return OperationQualificationType::SUBJECT_DIRECT->value;
         }
 
@@ -200,7 +200,7 @@ class InvoiceSubmission extends Invoice
             'IDEmisorFactura=' . $this->issuer->id,
             'NumSerieFactura=' . $this->invoiceNumber,
             'FechaExpedicionFactura=' . $this->invoiceDate->format('d-m-Y'),
-            'TipoFactura=' . $this->invoiceType->value,
+            'TipoFactura=' . $this->type->value,
             'CuotaTotal=' . $this->normalizeDecimal($this->taxAmount),
             'ImporteTotal=' . $this->normalizeDecimal($this->totalAmount),
             'Huella=' . $this->previousHash,
@@ -208,5 +208,15 @@ class InvoiceSubmission extends Invoice
         ];
 
         return Str::upper(hash('sha256', implode('&', $parts)));
+    }
+
+    /**
+     * Check for Standard (F2) invoice type
+     *
+     * @return bool
+     */
+    public function isSimplified(): bool
+    {
+        return $this->type === InvoiceType::SIMPLIFIED;
     }
 }

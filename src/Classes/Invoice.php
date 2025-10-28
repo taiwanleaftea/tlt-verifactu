@@ -53,19 +53,19 @@ abstract class Invoice
     /**
      * Set previous invoice data
      *
-     * @param string $invoiceNumber
+     * @param string $number
      * @param Carbon $date
      * @param string $hash
      * @return void
      */
     public function setPreviousInvoice(
-        string $invoiceNumber,
+        string $number,
         Carbon $date,
         string $hash
     ): void
     {
         $this->firstInvoice = false;
-        $this->previousNumber = $invoiceNumber;
+        $this->previousNumber = $number;
         $this->previousDate = $date;
         $this->previousHash = $hash;
     }
@@ -78,8 +78,8 @@ abstract class Invoice
      */
     public function getPreviousInvoice(): array
     {
-        if (!$this->firstInvoice) {
-            throw new InvoiceValidationException('Previous invoice not found.');
+        if ($this->firstInvoice) {
+            throw new InvoiceValidationException('This is the first invoice.');
         } else {
             return [
                 'number' => $this->previousNumber,

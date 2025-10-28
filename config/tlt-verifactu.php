@@ -3,6 +3,9 @@
 return [
     'production' => env('VERIFACTU_PRODUCTION',false),
 
+    // Disk with certificates
+    'disk' => env('VERIFACTU_DISK','local'),
+
     // Software information
     'system_name' => 'Invoicing Software',
     'installation_number' => 1,

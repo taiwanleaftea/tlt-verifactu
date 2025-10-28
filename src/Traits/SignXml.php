@@ -8,18 +8,27 @@ use DOMDocument;
 use RobRichards\XMLSecLibs\XMLSecurityDSig;
 use RobRichards\XMLSecLibs\XMLSecurityKey;
 use Taiwanleaftea\TltVerifactu\Classes\Certificate;
+use Taiwanleaftea\TltVerifactu\Exceptions\XmlGenerationException;
 
 trait SignXml
 {
     /**
+     * Sign XML in accordance with VERIFACTU specification
+     *
      * @param DOMDocument $dom
      * @param Certificate $certificate
      * @return DOMDocument
      * @throws \Taiwanleaftea\TltVerifactu\Exceptions\CertificateException
      * @throws \Exception
      */
-    public static function signXml(DOMDocument $dom, Certificate $certificate): DOMDocument
+    public function signXml(Certificate $certificate): DOMDocument
     {
+        if (!$this->generated) {
+            throw new XmlGenerationException('XML must be generated first.');
+        }
+
+        $dom = $this->document;
+
         $dSig = new XMLSecurityDSig();
         $dSig->setCanonicalMethod(XMLSecurityDSig::EXC_C14N);
         $dSig->addReference(
@@ -37,6 +46,9 @@ trait SignXml
 
         $dSig->sign($key);
         $dSig->appendSignature($dom->documentElement);
+
+        $this->document = $dom;
+        $this->signed = true;
 
         return $dom;
     }

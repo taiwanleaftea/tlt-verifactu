@@ -13,26 +13,45 @@ use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
 use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
 use Taiwanleaftea\TltVerifactu\Traits\BuildInformationSystem;
 use Taiwanleaftea\TltVerifactu\Traits\EnvelopeXml;
+use Taiwanleaftea\TltVerifactu\Traits\SanitizeXml;
 use Taiwanleaftea\TltVerifactu\Traits\SignXml;
 
 class SubmitInvoice
 {
-    use BuildInformationSystem, SignXml, EnvelopeXml;
+    use BuildInformationSystem, EnvelopeXml, SanitizeXml, SignXml;
+
+    /**
+     * @var DOMDocument
+     */
+    protected DOMDocument $document;
+
+    /**
+     * @var VerifactuSettings
+     */
+    protected VerifactuSettings $settings;
+
+    protected bool $generated = false;
+    protected bool $signed = false;
+
+    public function __construct(VerifactuSettings $settings)
+    {
+        $this->document = new DOMDocument('1.0', 'utf-8');
+        $this->settings = $settings;
+    }
 
     /**
      * Generate Invoice submission XML
      *
      * @param InvoiceSubmission $invoice
-     * @param VerifactuSettings $settings
      * @return DOMDocument
      * @throws InvoiceValidationException
      * @throws RecipientException
      * @throws \DOMException
      */
-    public static function getXml(InvoiceSubmission $invoice, VerifactuSettings $settings): DOMDocument
+    public function getXml(InvoiceSubmission $invoice): DOMDocument
     {
         $namespace = AEAT::SF_NAMESPACE;
-        $dom = new DOMDocument('1.0', 'utf-8');
+        $dom = $this->document;
         $dom->formatOutput = true;
 
         // RegistroAlta, required
@@ -58,16 +77,16 @@ class SubmitInvoice
         $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:NombreRazonEmisor', $invoice->issuer->name));
 
         // TipoFactura, required
-        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:TipoFactura', $invoice->invoiceType->value));
+        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:TipoFactura', $invoice->type->value));
 
         // DescripcionOperacion, required
         $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:DescripcionOperacion', $invoice->description));
 
         // FacturaSimplificadaArt7273
-        if ($invoice->invoiceType == InvoiceType::SIMPLIFIED) {
-            $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:FacturaSimplificadaArt7273', AEAT::YES));
+        if ($invoice->type == InvoiceType::SIMPLIFIED) {
+            $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:FacturaSinIdentifDestinatarioArt61d', AEAT::YES));
         } else {
-            $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:FacturaSimplificadaArt7273', AEAT::NO));
+            $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:FacturaSinIdentifDestinatarioArt61d', AEAT::NO));
 
             // Destinatario
             $destinatarios = $dom->createElementNS($namespace, 'sf:Destinatarios');
@@ -143,13 +162,13 @@ class SubmitInvoice
             $registroAnterior = $dom->createElementNS($namespace, 'sf:RegistroAnterior');
             $encadenamiento->appendChild($registroAnterior);
 
-            $registroAnterior->appendChild($dom->createElementNS($namespace, 'sf:IDEmisorFactura', $invoice->issuerNif));
+            $registroAnterior->appendChild($dom->createElementNS($namespace, 'sf:IDEmisorFactura', $invoice->issuer->id));
             $registroAnterior->appendChild($dom->createElementNS($namespace, 'sf:NumSerieFactura', $previousInvoice['number']));
             $registroAnterior->appendChild($dom->createElementNS($namespace, 'sf:FechaExpedicionFactura', $previousInvoice['date']));
             $registroAnterior->appendChild($dom->createElementNS($namespace, 'sf:Huella', $previousInvoice['hash']));
         }
 
-        $sistemaInformatico = self::buildInformationSystem($dom, $namespace, $settings->getInformationSystem());
+        $sistemaInformatico = self::buildInformationSystem($dom, $namespace, $this->settings->getInformationSystem());
 
         if ($sistemaInformatico !== false) {
             $registroAlta->appendChild($sistemaInformatico);
@@ -164,6 +183,10 @@ class SubmitInvoice
         // Huella
         $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:Huella', $invoice->hash()));
 
+        $this->document = $dom;
+        $this->generated = true;
+
+        // TODO return errors
         return $dom;
     }
 }
