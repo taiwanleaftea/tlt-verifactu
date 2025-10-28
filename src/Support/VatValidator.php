@@ -6,7 +6,7 @@ namespace Taiwanleaftea\TltVerifactu\Support;
 
 use SoapFault;
 use Illuminate\Support\Str;
-use Taiwanleaftea\TltVerifactu\Classes\Response;
+use Taiwanleaftea\TltVerifactu\Classes\ResponseVies;
 use Taiwanleaftea\TltVerifactu\Services\Soap;
 use Taiwanleaftea\TltVerifactu\Constants\VIES;
 use Taiwanleaftea\TltVerifactu\Exceptions\SoapClientException;
@@ -19,13 +19,13 @@ class VatValidator
      *
      * @param string $country
      * @param string $vatNumber
-     * @return Response
+     * @return ResponseVies
      */
-    public function online(string $country, string $vatNumber): Response
+    public function online(string $country, string $vatNumber): ResponseVies
     {
         $errors = [];
 
-        $response = new Response();
+        $response = new ResponseVies();
 
         if (!Vat::validateFormat($country, $vatNumber)) {
             $response->success = false;
