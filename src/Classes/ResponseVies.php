@@ -2,13 +2,11 @@
 
 namespace Taiwanleaftea\TltVerifactu\Classes;
 
-use Taiwanleaftea\TltVerifactu\Classes\Response;
-
+/*
+ * VAT validation response
+ */
 class ResponseVies extends Response
 {
-    /*
-     * VAT validation response
-     */
     public string $vatNumber;
     public string $countryCode;
     public bool $valid;

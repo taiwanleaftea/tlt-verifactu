@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Taiwanleaftea\TltVerifactu\Support;
 
+use DOMException;
 use Illuminate\Support\Carbon;
 use SoapFault;
 use SoapVar;
@@ -14,7 +15,10 @@ use Taiwanleaftea\TltVerifactu\Classes\Recipient;
 use Taiwanleaftea\TltVerifactu\Classes\ResponseAeat;
 use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
 use Taiwanleaftea\TltVerifactu\Constants\AEAT;
+use Taiwanleaftea\TltVerifactu\Enums\EstadoEnvio;
+use Taiwanleaftea\TltVerifactu\Exceptions\CertificateException;
 use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
+use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
 use Taiwanleaftea\TltVerifactu\Exceptions\SoapClientException;
 use Taiwanleaftea\TltVerifactu\Services\QRCode;
 use Taiwanleaftea\TltVerifactu\Services\Soap;
@@ -30,11 +34,23 @@ class Verifactu
         $this->settings = new VerifactuSettings();
     }
 
-    public function config(Certificate $certificate)
+    public function config(Certificate $certificate): void
     {
         $this->certificate = $certificate;
     }
 
+    /**
+     * Invoice submission service
+     *
+     * @param LegalPerson $issuer
+     * @param array $invoiceData
+     * @param array $options
+     * @param array|null $previous
+     * @param Recipient|null $recipient
+     * @param Carbon|null $timestamp
+     * @return ResponseAeat
+     * @throws CertificateException
+     */
     public function submitInvoice(
         LegalPerson $issuer,
         array $invoiceData,
@@ -42,7 +58,7 @@ class Verifactu
         ?array $previous = null,
         ?Recipient $recipient = null,
         ?Carbon $timestamp = null,
-    )
+    ): ResponseAeat
     {
         $keys = ['number', 'date', 'description', 'type', 'amount', 'base', 'vat', 'rate'];
         if (($key = $this->checkArray($keys, $invoiceData)) !== true) {
@@ -59,7 +75,7 @@ class Verifactu
             taxableBase: $invoiceData['base'],
             taxAmount: $invoiceData['vat'],
             totalAmount: $invoiceData['amount'],
-            timestamp: $timestamp ?? Carbon::now(),
+            timestamp: $timestamp ?? Carbon::now('Europe/Madrid'),
         );
 
         if (!$invoice->isSimplified()) {
@@ -84,9 +100,25 @@ class Verifactu
         }
 
         $submission = new SubmitInvoice($this->settings);
-        $submission->getXml($invoice);
-        $submission->signXml($this->certificate);
-        $envelopedDom = $submission->createEnvelopedXml($issuer);
+
+        try {
+            $submission->getXml($invoice);
+        } catch (DOMException|InvoiceValidationException|RecipientException $e) {
+            return $this->responseWithErrors('XML cannot be created: ' . $e->getMessage());
+        }
+
+        try {
+            $submission->signXml($this->certificate);
+        } catch (CertificateException $e) {
+            return $this->responseWithErrors('XML cannot be signed: ' . $e->getMessage());
+        }
+
+        try {
+            $envelopedDom = $submission->createEnvelopedXml($issuer);
+        } catch (DOMException $e) {
+            return $this->responseWithErrors('XML cannot be enveloped: ' . $e->getMessage());
+        }
+
         $finalXml = $submission->sanitizeXml($envelopedDom);
 
         $soapOptions = [
@@ -101,7 +133,7 @@ class Verifactu
         try {
             $soapClient = Soap::createClient(AEAT::WSDL_SANDBOX, $soapOptions);
         } catch (SoapClientException $e) {
-            return $this->responseWithErrors('Soap client error: ' . $e->getMessage());
+            return $this->responseWithErrors('SOAP client error: ' . $e->getMessage());
         }
 
         $soapVar = new SoapVar($finalXml, XSD_ANYXML);
@@ -120,6 +152,27 @@ class Verifactu
         }
 
         $response = new ResponseAeat();
+
+        if ($soapResponse->EstadoEnvio == EstadoEnvio::ACCEPTED->value) {
+            $response->success = true;
+            $response->csv = $soapResponse->CSV;
+        } else {
+            $response->success = false;
+            $response->status = EstadoEnvio::tryFrom($soapResponse->EstadoEnvio);
+
+            if ($response->status === null) {
+                $response->statusRaw = $soapResponse->EstadoEnvio;
+            }
+
+            $response->errors[] = 'Error ' . $soapResponse->RespuestaLinea->CodigoErrorRegistro . ': ' . $soapResponse->RespuestaLinea->DescripcionErrorRegistro;
+
+            if (isset($soapResponse->RespuestaLinea->RegistroDuplicado)) {
+                $response->duplicate = true;
+                $response->duplicateStatus = $soapResponse->RespuestaLinea->RegistroDuplicado->EstadoRegistroDuplicado;
+            }
+        }
+
+        $response->timestamp = Carbon::parse($soapResponse->DatosPresentacion->TimestampPresentacion);
         $response->request = $finalXml;
         $response->response = $soapResponse ?? null;
         $response->rawResponse = $soapClient->__getLastResponse();
