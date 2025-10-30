@@ -16,4 +16,6 @@ class ResponseAeat extends Response
     public ?string $statusRaw;
     public bool $duplicate;
     public string $duplicateStatus;
+    public ?string $hash = null;
+    public ?string $qrSVG = null;
 }

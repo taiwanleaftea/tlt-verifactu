@@ -23,9 +23,11 @@ use Taiwanleaftea\TltVerifactu\Exceptions\SoapClientException;
 use Taiwanleaftea\TltVerifactu\Services\QRCode;
 use Taiwanleaftea\TltVerifactu\Services\Soap;
 use Taiwanleaftea\TltVerifactu\Services\SubmitInvoice;
+use Taiwanleaftea\TltVerifactu\Traits\CheckArray;
 
 class Verifactu
 {
+    use CheckArray;
     private VerifactuSettings $settings;
     private Certificate $certificate;
 
@@ -75,7 +77,7 @@ class Verifactu
             taxableBase: $invoiceData['base'],
             taxAmount: $invoiceData['vat'],
             totalAmount: $invoiceData['amount'],
-            timestamp: $timestamp ?? Carbon::now('Europe/Madrid'),
+            timestamp: $timestamp ?? Carbon::now(),
         );
 
         if (!$invoice->isSimplified()) {
@@ -97,6 +99,10 @@ class Verifactu
                     hash: $previous['hash'],
                 );
             }
+        }
+
+        if (!empty($options)) {
+            $invoice->setOptions($options);
         }
 
         $submission = new SubmitInvoice($this->settings);
@@ -152,10 +158,18 @@ class Verifactu
         }
 
         $response = new ResponseAeat();
+        $response->hash = $invoice->hash();
 
         if ($soapResponse->EstadoEnvio == EstadoEnvio::ACCEPTED->value) {
             $response->success = true;
             $response->csv = $soapResponse->CSV;
+            $response->qrSVG = QRCode::SVG(
+                issuerNIF: $invoice->issuer->id,
+                invoiceDate: $invoice->invoiceDate,
+                number: $invoice->invoiceNumber,
+                totalAmount: $invoice->totalAmount,
+                isProduction: $this->settings->isProduction()
+            );
         } else {
             $response->success = false;
             $response->status = EstadoEnvio::tryFrom($soapResponse->EstadoEnvio);
@@ -312,17 +326,6 @@ class Verifactu
     ): string
     {
         return QRCode::SVG($issuerNIF, $invoiceDate, $number, $totalAmount, $this->settings->isProduction());
-    }
-
-    private function checkArray(array $keys, array $array): bool|string
-    {
-        foreach ($keys as $key) {
-            if (!array_key_exists($key, $array)) {
-                return $key;
-            }
-        }
-
-        return true;
     }
 
     /**

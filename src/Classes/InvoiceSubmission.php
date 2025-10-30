@@ -21,12 +21,14 @@ class InvoiceSubmission extends Invoice
     public float $taxRate;
     protected float $taxableBase;
     protected float $taxAmount;
-    protected float $totalAmount;
+    public float $totalAmount;
     protected Recipient $recipient;
     protected TaxType $taxType;
     protected TaxRegimeIVA $taxRegimeIVA;
     protected OperationQualificationType $operationQualification;
     public ExemptOperationType $exemptOperation;
+
+    protected array $options = [];
 
     public function __construct(
         LegalPerson $issuer,
@@ -38,7 +40,7 @@ class InvoiceSubmission extends Invoice
         float $taxableBase,
         float $taxAmount,
         float $totalAmount,
-        Carbon $timestamp = null,
+        Carbon $timestamp = null
     )
     {
         $this->issuer = $issuer;
@@ -51,6 +53,38 @@ class InvoiceSubmission extends Invoice
         $this->taxAmount = $taxAmount;
         $this->totalAmount = $totalAmount;
         $this->timestamp = $timestamp ?? Carbon::now();
+    }
+
+    /**
+     * Set/add options
+     *
+     * @param array $options
+     * @param bool $reset
+     */
+    public function setOptions(array $options, bool $reset = false): void
+    {
+        $keys = ['subsanation'];
+
+        if ($reset) {
+            $this->options = [];
+        }
+
+        foreach ($keys as $key) {
+            if (isset($options[$key])) {
+                $this->options[$key] = $options[$key];
+            }
+        }
+    }
+
+    /**
+     * Get option value or null
+     *
+     * @param string $key
+     * @return mixed
+     */
+    public function getOption(string $key): mixed
+    {
+        return $this->options[$key] ?? null;
     }
 
     /**

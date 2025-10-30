@@ -76,6 +76,11 @@ class SubmitInvoice
         // NombreRazonEmisor, required
         $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:NombreRazonEmisor', $invoice->issuer->name));
 
+        // Subsanación
+        if ($invoice->getOption('subsanacion') !== null) {
+            $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:Subsanacion', AEAT::YES));
+        }
+
         // TipoFactura, required
         $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:TipoFactura', $invoice->type->value));
 
