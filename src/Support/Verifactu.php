@@ -50,6 +50,7 @@ class Verifactu
      * @param LegalPerson $issuer
      * @param array $invoiceData
      * @param array $options
+     * @param OperationQualificationType $operationQualificationType
      * @param array|null $previous
      * @param Recipient|null $recipient
      * @param Carbon|null $timestamp
@@ -176,6 +177,7 @@ class Verifactu
         $response = new ResponseAeat();
         $response->hash = $invoice->hash();
         $response->csv = $soapResponse->CSV ?? null;
+        $response->json = json_encode($soapResponse, JSON_FORCE_OBJECT | JSON_PRETTY_PRINT);
 
         if (!isset($soapResponse->EstadoEnvio)) {
             $response->errors[] = 'EstadoEnvio has not been received.';
@@ -193,6 +195,7 @@ class Verifactu
                 totalAmount: $invoice->totalAmount,
                 isProduction: $this->settings->isProduction()
             );
+            // TODO разобрать все три варианта ответа от VF
         } else {
             $response->success = false;
 
