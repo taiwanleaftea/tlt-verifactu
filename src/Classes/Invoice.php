@@ -14,6 +14,7 @@ abstract class Invoice
     public string $externalReference;
     public Carbon $invoiceDate;
     public Carbon $timestamp;
+    protected ?string $hash;
 
     // Previous invoice
     protected bool $firstInvoice = true;
@@ -24,7 +25,7 @@ abstract class Invoice
     /**
      * Generate hash in AEAT format
      *
-     * @param string|null $timestamp
+     * @param string $timestamp
      * @return string
      */
     abstract public function hash(string $timestamp = null): string;

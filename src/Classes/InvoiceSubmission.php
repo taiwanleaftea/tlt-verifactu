@@ -40,7 +40,7 @@ class InvoiceSubmission extends Invoice
         float $taxableBase,
         float $taxAmount,
         float $totalAmount,
-        Carbon $timestamp = null
+        Carbon $timestamp
     )
     {
         $this->issuer = $issuer;
@@ -52,7 +52,7 @@ class InvoiceSubmission extends Invoice
         $this->taxableBase = $taxableBase;
         $this->taxAmount = $taxAmount;
         $this->totalAmount = $totalAmount;
-        $this->timestamp = $timestamp ?? Carbon::now();
+        $this->timestamp = $timestamp;
     }
 
     /**
@@ -230,18 +230,22 @@ class InvoiceSubmission extends Invoice
 
     public function hash(string $timestamp = null): string
     {
-        $parts = [
-            'IDEmisorFactura=' . $this->issuer->id,
-            'NumSerieFactura=' . $this->invoiceNumber,
-            'FechaExpedicionFactura=' . $this->invoiceDate->format('d-m-Y'),
-            'TipoFactura=' . $this->type->value,
-            'CuotaTotal=' . $this->normalizeDecimal($this->taxAmount),
-            'ImporteTotal=' . $this->normalizeDecimal($this->totalAmount),
-            'Huella=' . $this->previousHash,
-            is_null($timestamp) ? 'FechaHoraHusoGenRegistro=' . Carbon::now()->toAtomString() : 'FechaHoraHusoGenRegistro=' . $timestamp,
-        ];
+        if (!isset($this->hash)) {
+            $parts = [
+                'IDEmisorFactura=' . $this->issuer->id,
+                'NumSerieFactura=' . $this->invoiceNumber,
+                'FechaExpedicionFactura=' . $this->invoiceDate->format('d-m-Y'),
+                'TipoFactura=' . $this->type->value,
+                'CuotaTotal=' . $this->normalizeDecimal($this->taxAmount),
+                'ImporteTotal=' . $this->normalizeDecimal($this->totalAmount),
+                'Huella=' . $this->previousHash,
+                is_null($timestamp) ? 'FechaHoraHusoGenRegistro=' . $timestamp : 'FechaHoraHusoGenRegistro=' . $this->getTimestamp(),
+            ];
 
-        return Str::upper(hash('sha256', implode('&', $parts)));
+            $this->hash = Str::upper(hash('sha256', implode('&', $parts)));
+        }
+
+        return $this->hash;
     }
 
     /**

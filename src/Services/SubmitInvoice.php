@@ -180,13 +180,13 @@ class SubmitInvoice
         }
 
         // FechaHoraHusoGenRegistro
-        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:FechaHoraHusoGenRegistro', (string) $invoice->getTimestamp()));
+        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:FechaHoraHusoGenRegistro', $invoice->getTimestamp()));
 
         // TipoHuella
         $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:TipoHuella', AEAT::SHA_256));
 
         // Huella
-        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:Huella', $invoice->hash()));
+        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:Huella', $invoice->hash($invoice->getTimestamp())));
 
         $this->document = $dom;
         $this->generated = true;

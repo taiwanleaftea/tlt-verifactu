@@ -16,10 +16,13 @@ use Taiwanleaftea\TltVerifactu\Classes\ResponseAeat;
 use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
 use Taiwanleaftea\TltVerifactu\Constants\AEAT;
 use Taiwanleaftea\TltVerifactu\Enums\EstadoEnvio;
+use Taiwanleaftea\TltVerifactu\Enums\EstadoRegistro;
+use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
 use Taiwanleaftea\TltVerifactu\Exceptions\CertificateException;
 use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
 use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
 use Taiwanleaftea\TltVerifactu\Exceptions\SoapClientException;
+use Taiwanleaftea\TltVerifactu\Support\Facades\VatValidator;
 use Taiwanleaftea\TltVerifactu\Services\QRCode;
 use Taiwanleaftea\TltVerifactu\Services\Soap;
 use Taiwanleaftea\TltVerifactu\Services\SubmitInvoice;
@@ -57,6 +60,7 @@ class Verifactu
         LegalPerson $issuer,
         array $invoiceData,
         array $options,
+        OperationQualificationType $operationQualificationType = OperationQualificationType::SUBJECT_DIRECT,
         ?array $previous = null,
         ?Recipient $recipient = null,
         ?Carbon $timestamp = null,
@@ -86,6 +90,14 @@ class Verifactu
             } else {
                 $invoice->setRecipient($recipient);
             }
+
+            if ($operationQualificationType == OperationQualificationType::SUBJECT_REVERSE && !VatValidator::isEU($recipient->countryCode)) {
+                return $this->responseWithErrors('Recipient must be from EU to apply reverse charge.');
+            } else {
+                $invoice->setOperationQualification($operationQualificationType);
+            }
+        } else {
+            $invoice->setOperationQualification(OperationQualificationType::SUBJECT_DIRECT);
         }
 
         if ($previous !== null) {
@@ -109,8 +121,12 @@ class Verifactu
 
         try {
             $submission->getXml($invoice);
-        } catch (DOMException|InvoiceValidationException|RecipientException $e) {
-            return $this->responseWithErrors('XML cannot be created: ' . $e->getMessage());
+        } catch (DOMException $e) {
+            return $this->responseWithErrors('XML cannot be created (getXml): ' . $e->getMessage());
+        } catch (InvoiceValidationException $e) {
+            return $this->responseWithErrors('Invoice cannot be validated (getXml): ' . $e->getMessage());
+        } catch (RecipientException $e) {
+            return $this->responseWithErrors('Recipient cannot be validated (getXml): ' . $e->getMessage());
         }
 
         try {
@@ -159,10 +175,17 @@ class Verifactu
 
         $response = new ResponseAeat();
         $response->hash = $invoice->hash();
+        $response->csv = $soapResponse->CSV ?? null;
 
-        if ($soapResponse->EstadoEnvio == EstadoEnvio::ACCEPTED->value) {
+        if (!isset($soapResponse->EstadoEnvio)) {
+            $response->errors[] = 'EstadoEnvio has not been received.';
+            $response->errors[] = 'Last SOAP response: ' . $soapClient->__getLastResponse();
+        } elseif ($soapResponse->EstadoEnvio == EstadoEnvio::ACCEPTED->value) {
             $response->success = true;
-            $response->csv = $soapResponse->CSV;
+            if (isset($soapResponse->RespuestaLinea->EstadoRegistro)) {
+                $response->status = EstadoRegistro::tryFrom($soapResponse->RespuestaLinea->EstadoRegistro);
+            }
+
             $response->qrSVG = QRCode::SVG(
                 issuerNIF: $invoice->issuer->id,
                 invoiceDate: $invoice->invoiceDate,
@@ -172,13 +195,19 @@ class Verifactu
             );
         } else {
             $response->success = false;
-            $response->status = EstadoEnvio::tryFrom($soapResponse->EstadoEnvio);
 
-            if ($response->status === null) {
-                $response->statusRaw = $soapResponse->EstadoEnvio;
+            if (isset($soapResponse->RespuestaLinea->EstadoRegistro)) {
+                $response->status = EstadoRegistro::tryFrom($soapResponse->RespuestaLinea->EstadoRegistro);
+
+                if ($response->status === null) {
+                    $response->statusRaw = $soapResponse->RespuestaLinea->EstadoRegistro;
+                }
             }
 
-            $response->errors[] = 'Error ' . $soapResponse->RespuestaLinea->CodigoErrorRegistro . ': ' . $soapResponse->RespuestaLinea->DescripcionErrorRegistro;
+            if (isset($soapResponse->RespuestaLinea->EstadoRegistro, $soapResponse->RespuestaLinea->DescripcionErrorRegistro)) {
+                $response->errors[] = 'Error ' . $soapResponse->RespuestaLinea->CodigoErrorRegistro . ': ' . $soapResponse->RespuestaLinea->DescripcionErrorRegistro;
+                $response->aeatErrorCode = $soapResponse->RespuestaLinea->CodigoErrorRegistro;
+            }
 
             if (isset($soapResponse->RespuestaLinea->RegistroDuplicado)) {
                 $response->duplicate = true;
@@ -186,7 +215,9 @@ class Verifactu
             }
         }
 
-        $response->timestamp = Carbon::parse($soapResponse->DatosPresentacion->TimestampPresentacion);
+        if (isset($soapResponse->DatosPresentacion->TimestampPresentacion)) {
+            $response->timestamp = Carbon::parse($soapResponse->DatosPresentacion->TimestampPresentacion);
+        }
         $response->request = $finalXml;
         $response->response = $soapResponse ?? null;
         $response->rawResponse = $soapClient->__getLastResponse();

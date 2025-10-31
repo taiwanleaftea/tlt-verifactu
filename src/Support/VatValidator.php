@@ -96,4 +96,15 @@ class VatValidator
             return Str::of($vatNumber)->trim()->replace([' ', '.', '-', '_'], '', false)->upper()->toString();
         }
     }
+
+    /**
+     * Check if country is EU member
+     *
+     * @param string $countryCode
+     * @return bool
+     */
+    public function isEU(string $countryCode): bool
+    {
+        return in_array($countryCode, VIES::MEMBERS);
+    }
 }
