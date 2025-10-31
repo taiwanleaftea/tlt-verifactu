@@ -111,7 +111,11 @@ class SubmitInvoice
 
                 $idOtro->appendChild($dom->createElementNS($namespace, 'sf:CodigoPais', $recipient->countryCode));
                 $idOtro->appendChild($dom->createElementNS($namespace, 'sf:IDType', $recipient->idType->value));
-                $idOtro->appendChild($dom->createElementNS($namespace, 'sf:ID', $recipient->id));
+                if ($invoice->isIntracommunityOperation()) {
+                    $idOtro->appendChild($dom->createElementNS($namespace, 'sf:ID', $recipient->getId()));
+                } else {
+                    $idOtro->appendChild($dom->createElementNS($namespace, 'sf:ID', $recipient->id));
+                }
             }
         }
 
@@ -137,14 +141,18 @@ class SubmitInvoice
             $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:OperacionExenta', $invoice->exemptOperation->value));
         }
 
-        // TipoImpositivo
-        $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:TipoImpositivo', $invoice->getTaxRate()));
+        if (!$invoice->isVatExemptOperation()) {
+            // TipoImpositivo, required for non VAT exempt operations
+            $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:TipoImpositivo', $invoice->getTaxRate()));
+        }
 
         // BaseImponibleOimporteNoSujeto
         $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:BaseImponibleOimporteNoSujeto', $invoice->getTaxableBase()));
 
-        // CuotaRepercutida
-        $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:CuotaRepercutida', $invoice->getTaxAmount()));
+        if (!$invoice->isVatExemptOperation()) {
+            // CuotaRepercutida, required for non VAT exempt operations
+            $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:CuotaRepercutida', $invoice->getTaxAmount()));
+        }
 
         // TODO RecargoEquivalencia
 

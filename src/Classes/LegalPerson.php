@@ -6,6 +6,7 @@ namespace Taiwanleaftea\TltVerifactu\Classes;
 
 use Illuminate\Support\Str;
 use Taiwanleaftea\TltVerifactu\Enums\IdType;
+use Taiwanleaftea\TltVerifactu\Support\Facades\VatValidator;
 
 class LegalPerson
 {
@@ -37,4 +38,17 @@ class LegalPerson
         return $this->countryCode == 'ES';
     }
 
+    /**
+     * Get ID with country code for EU
+     *
+     * @return string
+     */
+    public function getId(): string
+    {
+        if (VatValidator::isEU($this->countryCode)) {
+            return $this->countryCode . $this->id;
+        } else {
+            return $this->id;
+        }
+    }
 }

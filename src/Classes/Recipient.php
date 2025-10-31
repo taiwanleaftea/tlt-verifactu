@@ -19,8 +19,18 @@ class Recipient extends LegalPerson
      */
     public function __construct(string $name, string $id, string $countryCode, IdType $idType)
     {
-        if (!$id && VatValidator::isEU($countryCode)) {
+        $isEU = VatValidator::isEU($countryCode);
+
+        if (!$id && $isEU) {
             throw new RecipientException('VAT ID required for the country ' . $countryCode);
+        }
+
+        if ($isEU && $idType != IdType::NIF) {
+            throw new RecipientException('VAT ID type must be ' . IdType::NIF->value . ' for EU country.');
+        }
+
+        if ($isEU) {
+            $id = VatValidator::sanitize($countryCode, $id, true);
         }
 
         parent::__construct($name, $id, $countryCode, $idType);

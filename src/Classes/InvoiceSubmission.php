@@ -228,6 +228,31 @@ class InvoiceSubmission extends Invoice
         return $this->operationQualification->value;
     }
 
+    /**
+     * Check if operation qualification type is VAT exempt
+     *
+     * @return bool
+     * @throws InvoiceValidationException
+     */
+    public function isVatExemptOperation(): bool
+    {
+        if (!isset($this->operationQualification)) {
+            throw new InvoiceValidationException('Operation qualification must be set for normal invoice.');
+        }
+
+        return $this->operationQualification == OperationQualificationType::NOT_SUBJECT_LOCALIZATION || $this->operationQualification == OperationQualificationType::NOT_SUBJECT_ARTICLE;
+    }
+
+    /**
+     * Check if operation qualification type is intracommunity (customer is EU company)
+     *
+     * @return bool
+     */
+    public function isIntracommunityOperation(): bool
+    {
+        return $this->operationQualification == OperationQualificationType::SUBJECT_REVERSE;
+    }
+
     public function hash(string $timestamp = null): string
     {
         if (!isset($this->hash)) {
