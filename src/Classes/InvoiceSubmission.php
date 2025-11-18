@@ -27,7 +27,6 @@ class InvoiceSubmission extends Invoice
     protected TaxRegimeIVA $taxRegimeIVA;
     protected OperationQualificationType $operationQualification;
     public ExemptOperationType $exemptOperation;
-
     protected array $options = [];
 
     public function __construct(
@@ -60,10 +59,21 @@ class InvoiceSubmission extends Invoice
      *
      * @param array $options
      * @param bool $reset
+     * @throws InvoiceValidationException
      */
     public function setOptions(array $options, bool $reset = false): void
     {
-        $keys = ['subsanation'];
+        $keys = ['subsanacion', 'rectificado'];
+
+        foreach ($options as $option => $value) {
+            if (!in_array($option, $keys)) {
+                throw new InvoiceValidationException("Option $option does not allowed here.");
+            }
+
+            if ($option === 'rectificado' && !isset($value['invoice_number'], $value['invoice_date'], $value['simplified'])) {
+                throw new InvoiceValidationException(Str::ucfirst($option) . " must contain 'invoice_number', 'invoice_date' and 'simplified'.");
+            }
+        }
 
         if ($reset) {
             $this->options = [];
@@ -240,7 +250,7 @@ class InvoiceSubmission extends Invoice
             throw new InvoiceValidationException('Operation qualification must be set for normal invoice.');
         }
 
-        return $this->operationQualification == OperationQualificationType::NOT_SUBJECT_LOCALIZATION || $this->operationQualification == OperationQualificationType::NOT_SUBJECT_ARTICLE;
+        return $this->operationQualification === OperationQualificationType::NOT_SUBJECT_LOCALIZATION || $this->operationQualification == OperationQualificationType::NOT_SUBJECT_ARTICLE;
     }
 
     /**
@@ -250,7 +260,7 @@ class InvoiceSubmission extends Invoice
      */
     public function isIntracommunityOperation(): bool
     {
-        return $this->operationQualification == OperationQualificationType::SUBJECT_REVERSE;
+        return $this->operationQualification === OperationQualificationType::SUBJECT_REVERSE;
     }
 
     public function hash(string $timestamp = null): string
@@ -281,5 +291,15 @@ class InvoiceSubmission extends Invoice
     public function isSimplified(): bool
     {
         return $this->type === InvoiceType::SIMPLIFIED;
+    }
+
+    /**
+     * Check for credit note (Factura rectificada)
+     *
+     * @return bool
+     */
+    public function isRectificado(): bool
+    {
+        return $this->type === InvoiceType::RECTIFICATION_1 || $this->type === InvoiceType::RECTIFICATION_2 || $this->type === InvoiceType::RECTIFICATION_3 || $this->type === InvoiceType::RECTIFICATION_4 || $this->type === InvoiceType::RECTIFICATION_SIMPLIFIED;
     }
 }

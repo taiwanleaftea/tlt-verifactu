@@ -8,6 +8,7 @@ use DOMDocument;
 use Taiwanleaftea\TltVerifactu\Classes\InvoiceSubmission;
 use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
 use Taiwanleaftea\TltVerifactu\Constants\AEAT;
+use Taiwanleaftea\TltVerifactu\Enums\CreditNoteType;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
 use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
@@ -83,6 +84,24 @@ class SubmitInvoice
 
         // TipoFactura, required
         $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:TipoFactura', $invoice->type->value));
+
+        // TipoRectificativa
+        if ($invoice->isRectificado()) {
+            $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:TipoRectificativa', CreditNoteType::DIFFERENCE->value));
+
+            // FacturasRectificadas
+            $facturasRectificadas = $dom->createElementNS($namespace, 'sf:FacturasRectificadas');
+            $registroAlta->appendChild($facturasRectificadas);
+
+            // IDFacturaRectificada
+            $iDFacturaRectificada = $dom->createElementNS($namespace, 'sf:IDFacturaRectificada');
+            $facturasRectificadas->appendChild($iDFacturaRectificada);
+
+            $rectificado = $invoice->getOption('rectificado');
+            $iDFacturaRectificada->appendChild($dom->createElementNS($namespace, 'sf:IDEmisorFactura', $invoice->issuer->id));
+            $iDFacturaRectificada->appendChild($dom->createElementNS($namespace, 'sf:NumSerieFactura', $rectificado['invoice_number']));
+            $iDFacturaRectificada->appendChild($dom->createElementNS($namespace, 'sf:FechaExpedicionFactura', $rectificado['invoice_date']->format('d-m-Y')));
+        }
 
         // DescripcionOperacion, required
         $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:DescripcionOperacion', $invoice->description));

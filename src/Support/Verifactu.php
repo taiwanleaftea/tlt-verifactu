@@ -115,7 +115,15 @@ class Verifactu
         }
 
         if (!empty($options)) {
-            $invoice->setOptions($options);
+            try {
+                $invoice->setOptions($options);
+            } catch (InvoiceValidationException $e) {
+                return $this->responseWithErrors('Invoice cannot be validated (getXml): ' . $e->getMessage());
+            }
+        }
+
+        if ($invoice->isRectificado() && $invoice->getOption('rectificado') === null) {
+            return $this->responseWithErrors('Credit note (factura rectificada) does not contain necessary data (submitInvoice).');
         }
 
         $submission = new SubmitInvoice($this->settings);
