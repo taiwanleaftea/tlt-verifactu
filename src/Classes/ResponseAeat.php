@@ -9,12 +9,12 @@ use Taiwanleaftea\TltVerifactu\Enums\EstadoRegistro;
  */
 class ResponseAeat extends Response
 {
-    public string $request;
+    public ?string $request = null;
     public mixed $response;
-    public ?string $rawResponse;
+    public ?string $rawResponse = null;
     public ?EstadoRegistro $status = null;
-    public ?string $statusRaw;
-    public ?int $aeatErrorCode;
+    public ?string $statusRaw = null;
+    public ?int $aeatErrorCode = null;
     public bool $duplicate;
     public string $duplicateStatus;
     public ?string $hash = null;
