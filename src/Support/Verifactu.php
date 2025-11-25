@@ -9,6 +9,8 @@ use Illuminate\Support\Carbon;
 use SoapFault;
 use SoapVar;
 use Taiwanleaftea\TltVerifactu\Classes\Certificate;
+use Taiwanleaftea\TltVerifactu\Classes\Generator;
+use Taiwanleaftea\TltVerifactu\Classes\InvoiceCancellation;
 use Taiwanleaftea\TltVerifactu\Classes\InvoiceSubmission;
 use Taiwanleaftea\TltVerifactu\Classes\LegalPerson;
 use Taiwanleaftea\TltVerifactu\Classes\Recipient;
@@ -19,9 +21,11 @@ use Taiwanleaftea\TltVerifactu\Enums\EstadoEnvio;
 use Taiwanleaftea\TltVerifactu\Enums\EstadoRegistro;
 use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
 use Taiwanleaftea\TltVerifactu\Exceptions\CertificateException;
+use Taiwanleaftea\TltVerifactu\Exceptions\GeneratorException;
 use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
 use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
 use Taiwanleaftea\TltVerifactu\Exceptions\SoapClientException;
+use Taiwanleaftea\TltVerifactu\Services\CancelInvoice;
 use Taiwanleaftea\TltVerifactu\Support\Facades\VatValidator;
 use Taiwanleaftea\TltVerifactu\Services\QRCode;
 use Taiwanleaftea\TltVerifactu\Services\Soap;
@@ -103,7 +107,7 @@ class Verifactu
 
         if ($previous !== null) {
             $keys = ['number', 'date', 'hash'];
-            if (!$this->checkArray($keys, $invoiceData)) {
+            if (!$this->checkArray($keys, $previous)) {
                 return $this->responseWithErrors('Previous invoice key is missing.');
             } else {
                 $invoice->setPreviousInvoice(
@@ -140,7 +144,7 @@ class Verifactu
 
         try {
             $submission->signXml($this->certificate);
-        } catch (CertificateException $e) {
+        } catch (CertificateException|\Exception $e) {
             return $this->responseWithErrors('XML cannot be signed: ' . $e->getMessage());
         }
 
@@ -237,120 +241,77 @@ class Verifactu
     }
 
     /**
-     * @throws InvoiceValidationException
+     * @param LegalPerson $issuer
+     * @param array $invoiceData
+     * @param array|null $previous
+     * @param Generator|null $generator
+     * @param Carbon|null $timestamp
+     * @return ResponseAeat|void
      */
     public function cancelInvoice(
-        string $issuerNIF,
-        Carbon $date,
-        string $invoiceNumber,
-        ?string $previousNumber = null,
-        ?Carbon $previousDate = null,
-        ?string $previousHash = null,
+        LegalPerson $issuer,
+        array $invoiceData,
+        ?array $previous = null,
+        ?Generator $generator = null,
+        ?Carbon $timestamp = null,
     )
     {
-        VerifactuLibrary::config($this->path, $this->password, $this->type, $this->environment);
-
-        $cancellation = new InvoiceCancellation();
-
-        // Set invoice ID (using object-oriented approach)
-        $invoiceId = new InvoiceId();
-        $invoiceId->issuerNif = $issuerNIF;
-        $invoiceId->seriesNumber = $invoiceNumber;
-        $invoiceId->issueDate = $date->format('d-m-Y');
-        $cancellation->setInvoiceId($invoiceId);
-
-        // Set chaining data (using object-oriented approach)
-        $chaining = new Chaining();
-        if ($previousNumber) {
-            // For subsequent invoices in a chain:
-            $chaining->setPreviousInvoice([
-                'seriesNumber' => $previousNumber,
-                'issuerNif' => $issuerNIF,
-                'issueDate' => $previousDate->format('d-m-Y'),
-                'hash' => $previousHash
-            ]);
-        } else {
-            //$chaining->setAsFirstRecord();
-        }
-        $cancellation->setChaining($chaining);
-
-        // Set system information (using object-oriented approach)
-        $computerSystem = new ComputerSystem();
-        $computerSystem->systemName = $this->systemName;
-        $computerSystem->version = self::VERSION;
-        $computerSystem->providerName = $this->providerName;
-        $computerSystem->systemId = '01';
-        $computerSystem->installationNumber = '1';
-        $computerSystem->onlyVerifactu = YesNoType::YES;
-        $computerSystem->multipleObligations = YesNoType::NO;
-
-        // Set provider information
-        $provider = new LegalPerson();
-        $provider->name = $this->providerName;
-        $provider->nif = $this->providerNif;
-        $computerSystem->setProviderId($provider);
-
-        $cancellation->setSystemInfo($computerSystem);
-
-        // Set other required fields
-        $cancellation->recordTimestamp = $date->now()->toAtomString(); //'2024-07-01T12:00:00+02:00'; // Date and time with timezone
-        $cancellation->hashType = HashType::SHA_256;
-        $cancellation->hash = HashGeneratorService::generate($cancellation); // Calculated hash
-
-        // Optional fields
-        if (!$previousNumber) {
-            $cancellation->noPreviousRecord = YesNoType::NO; // Not a cancellation without previous record
+        $keys = ['number', 'date'];
+        if (($key = $this->checkArray($keys, $invoiceData)) !== true) {
+            return $this->responseWithErrors('Invoice cancellation key ' . $key . ' is missing.');
         }
 
-        $cancellation->previousRejection = YesNoType::NO; // Not a cancellation due to previous rejection
-        $cancellation->generator = GeneratorType::ISSUER; // Generated by the issuer
-        //$cancellation->externalRef = 'REF-CANCEL-123'; // External reference
+        $invoice = new InvoiceCancellation(
+            issuer: $issuer,
+            invoiceNumber: $invoiceData['number'],
+            invoiceDate: $invoiceData['date'],
+            timestamp: $timestamp ?? Carbon::now(),
+        );
 
-        // Validate the cancellation before submission
-        $validationResult = $cancellation->validate();
-        if ($validationResult) {
-            // Handle validation errors
-            $message = 'Invoice validation failed' . PHP_EOL;
-            foreach ($validationResult as $result) {
-                $message .= implode(PHP_EOL, $result) . PHP_EOL;
+        if ($previous !== null) {
+            $keys = ['number', 'date', 'hash'];
+            if (!$this->checkArray($keys, $previous)) {
+                return $this->responseWithErrors('Previous invoice key is missing.');
+            } else {
+                $invoice->setPreviousInvoice(
+                    number: $previous['number'],
+                    date: $previous['date'],
+                    hash: $previous['hash'],
+                );
             }
-
-            throw new InvoiceValidationException($message);
         }
 
-        // Submit the cancellation
-        $response = VerifactuLibrary::cancelInvoice($cancellation);
-
-        if ($response->submissionStatus === InvoiceResponse::STATUS_OK) {
-            return [
-                'success' => true,
-                'hash' => $cancellation->hash,
-                'csv' => $response->csv,
-                'cancellation' => $cancellation,
-                'errors' => []
-            ];
-        } else {
-            // Check error codes and messages in $response->lineResponses
-            $errors = [];
-            foreach ($response->lineResponses as $lineResponse) {
-                $error = 'Error code: ';
-                $error .= $lineResponse['CodigoErrorRegistro'] ?? 'n/a';
-                $error .= PHP_EOL;
-                $error .= 'Registro error description: ';
-                $error .= $lineResponse['DescripcionErrorRegistro'] ?? 'n/a';
-                $error .= PHP_EOL;
-                $error .= 'Error description: ';
-                $error .= $lineResponse['ErrorDescription'] ?? 'n/a';
-                $errors[] = $error;
-            }
-            return [
-                'success' => false,
-                'hash' => $cancellation->hash,
-                'csv' => '',
-                'invoice' => $cancellation,
-                'errors' => $errors
-            ];
+        if ($generator !== null) {
+            $invoice->setGenerator($generator);
         }
+
+        $cancellation = new CancelInvoice($this->settings);
+
+        try {
+            $cancellation->getXml($invoice);
+        } catch (DOMException $e) {
+            return $this->responseWithErrors('XML cannot be created (getXml): ' . $e->getMessage());
+        } catch (InvoiceValidationException $e) {
+            return $this->responseWithErrors('Invoice cancellation cannot be validated (getXml): ' . $e->getMessage());
+        } catch (GeneratorException $e) {
+            return $this->responseWithErrors('Invoice cancellation generator cannot be set (getXml): ' . $e->getMessage());
+        }
+
+        try {
+            $cancellation->signXml($this->certificate);
+        } catch (CertificateException|\Exception $e) {
+            return $this->responseWithErrors('XML cannot be signed: ' . $e->getMessage());
+        }
+
+        try {
+            $envelopedDom = $cancellation->createEnvelopedXml($issuer);
+        } catch (DOMException $e) {
+            return $this->responseWithErrors('XML cannot be enveloped: ' . $e->getMessage());
+        }
+
+        $finalXml = $cancellation->sanitizeXml($envelopedDom);
+
+        dd($finalXml);
     }
 
     /**

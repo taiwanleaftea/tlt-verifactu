@@ -27,7 +27,6 @@ class InvoiceSubmission extends Invoice
     protected TaxRegimeIVA $taxRegimeIVA;
     protected OperationQualificationType $operationQualification;
     public ExemptOperationType $exemptOperation;
-    protected array $options = [];
 
     public function __construct(
         LegalPerson $issuer,
@@ -52,49 +51,8 @@ class InvoiceSubmission extends Invoice
         $this->taxAmount = $taxAmount;
         $this->totalAmount = $totalAmount;
         $this->timestamp = $timestamp;
-    }
 
-    /**
-     * Set/add options
-     *
-     * @param array $options
-     * @param bool $reset
-     * @throws InvoiceValidationException
-     */
-    public function setOptions(array $options, bool $reset = false): void
-    {
-        $keys = ['subsanacion', 'rectificado'];
-
-        foreach ($options as $option => $value) {
-            if (!in_array($option, $keys)) {
-                throw new InvoiceValidationException("Option $option does not allowed here.");
-            }
-
-            if ($option === 'rectificado' && !isset($value['invoice_number'], $value['invoice_date'], $value['simplified'])) {
-                throw new InvoiceValidationException(Str::ucfirst($option) . " must contain 'invoice_number', 'invoice_date' and 'simplified'.");
-            }
-        }
-
-        if ($reset) {
-            $this->options = [];
-        }
-
-        foreach ($keys as $key) {
-            if (isset($options[$key])) {
-                $this->options[$key] = $options[$key];
-            }
-        }
-    }
-
-    /**
-     * Get option value or null
-     *
-     * @param string $key
-     * @return mixed
-     */
-    public function getOption(string $key): mixed
-    {
-        return $this->options[$key] ?? null;
+        $this->optionsKeys = ['subsanacion', 'rectificado'];
     }
 
     /**

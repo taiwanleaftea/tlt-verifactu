@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Taiwanleaftea\TltVerifactu\Services;
 
 use DOMDocument;
+use DOMException;
 use Taiwanleaftea\TltVerifactu\Classes\InvoiceSubmission;
 use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
 use Taiwanleaftea\TltVerifactu\Constants\AEAT;
@@ -47,7 +48,7 @@ class SubmitInvoice
      * @return DOMDocument
      * @throws InvoiceValidationException
      * @throws RecipientException
-     * @throws \DOMException
+     * @throws DOMException
      */
     public function getXml(InvoiceSubmission $invoice): DOMDocument
     {
