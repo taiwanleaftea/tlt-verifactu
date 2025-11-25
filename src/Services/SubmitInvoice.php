@@ -107,7 +107,7 @@ class SubmitInvoice
         $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:DescripcionOperacion', $invoice->description));
 
         // FacturaSimplificadaArt7273
-        if ($invoice->type == InvoiceType::SIMPLIFIED) {
+        if ($invoice->type == InvoiceType::SIMPLIFIED || ($invoice->type == InvoiceType::RECTIFICATION_SIMPLIFIED)) {
             $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:FacturaSinIdentifDestinatarioArt61d', AEAT::YES));
         } else {
             $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:FacturaSinIdentifDestinatarioArt61d', AEAT::NO));
