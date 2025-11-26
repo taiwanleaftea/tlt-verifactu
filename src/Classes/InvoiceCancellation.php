@@ -67,13 +67,19 @@ class InvoiceCancellation extends Invoice
         return $this->generator;
     }
 
+    /**
+     * Hash generator for cancellation
+     *
+     * @param string|null $timestamp
+     * @return string
+     */
     public function hash(string $timestamp = null): string
     {
         $parts = [
             'IDEmisorFacturaAnulada=' . $this->issuer->id,
             'NumSerieFacturaAnulada=' . $this->invoiceNumber,
             'FechaExpedicionFacturaAnulada=' . $this->invoiceDate->format('d-m-Y'),
-            'Huella=' . $this->invoiceHash,
+            'Huella=' . $this->previousHash,
             is_null($timestamp) ? 'FechaHoraHusoGenRegistro=' . Carbon::now()->toAtomString() : 'FechaHoraHusoGenRegistro=' . $timestamp,
         ];
 

@@ -221,6 +221,12 @@ class InvoiceSubmission extends Invoice
         return $this->operationQualification === OperationQualificationType::SUBJECT_REVERSE;
     }
 
+    /**
+     * Hash generator for submission
+     *
+     * @param string|null $timestamp
+     * @return string
+     */
     public function hash(string $timestamp = null): string
     {
         if (!isset($this->hash)) {

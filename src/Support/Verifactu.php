@@ -243,15 +243,16 @@ class Verifactu
     /**
      * @param LegalPerson $issuer
      * @param array $invoiceData
-     * @param array|null $previous
+     * @param array $previous
      * @param Generator|null $generator
      * @param Carbon|null $timestamp
      * @return ResponseAeat|void
+     * @throws CertificateException
      */
     public function cancelInvoice(
         LegalPerson $issuer,
         array $invoiceData,
-        ?array $previous = null,
+        array $previous,
         ?Generator $generator = null,
         ?Carbon $timestamp = null,
     )
@@ -311,7 +312,80 @@ class Verifactu
 
         $finalXml = $cancellation->sanitizeXml($envelopedDom);
 
-        dd($finalXml);
+        $soapOptions = [
+            'location' => $this->settings->getVerifactuServiceUrl(),
+            'trace' => 1,
+            'exceptions' => true,
+            'local_cert' => $this->certificate->generatePem(),
+            'passphrase' => $this->certificate->getPassword(),
+            'cache_wsdl' => WSDL_CACHE_NONE,
+        ];
+
+        try {
+            $soapClient = Soap::createClient(AEAT::WSDL_SANDBOX, $soapOptions);
+        } catch (SoapClientException $e) {
+            return $this->responseWithErrors('SOAP client error: ' . $e->getMessage());
+        }
+
+        $soapVar = new SoapVar($finalXml, XSD_ANYXML);
+
+        try {
+            $soapResponse = $soapClient->__soapCall('RegFactuSistemaFacturacion', [$soapVar]);
+        } catch (SoapFault $e) {
+            $errors = [];
+            $errors[] = 'SOAP call failed: ' . $e->getMessage();
+            $errors[] = 'XML sent: ' . PHP_EOL . $finalXml;
+            $errors[] = 'Last SOAP call: ' . $soapClient->__getLastRequest();
+            $errors[] = 'Last SOAP response: ' . $soapClient->__getLastResponse();
+            $errors[] = 'Last request header: ' . $soapClient->__getLastRequestHeaders();
+
+            return $this->responseWithErrors($errors, ['request' => $finalXml]);
+        }
+
+        $response = new ResponseAeat();
+        $response->hash = $invoice->hash();
+        $response->csv = $soapResponse->CSV ?? null;
+        $response->json = json_encode($soapResponse, JSON_FORCE_OBJECT | JSON_PRETTY_PRINT);
+
+        if (!isset($soapResponse->EstadoEnvio)) {
+            $response->errors[] = 'EstadoEnvio has not been received.';
+            $response->errors[] = 'Last SOAP response: ' . $soapClient->__getLastResponse();
+        } elseif ($soapResponse->EstadoEnvio == EstadoEnvio::ACCEPTED->value) {
+            $response->success = true;
+            if (isset($soapResponse->RespuestaLinea->EstadoRegistro)) {
+                $response->status = EstadoRegistro::tryFrom($soapResponse->RespuestaLinea->EstadoRegistro);
+            }
+            // TODO разобрать все три варианта ответа от VF
+        } else {
+            $response->success = false;
+
+            if (isset($soapResponse->RespuestaLinea->EstadoRegistro)) {
+                $response->status = EstadoRegistro::tryFrom($soapResponse->RespuestaLinea->EstadoRegistro);
+
+                if ($response->status === null) {
+                    $response->statusRaw = $soapResponse->RespuestaLinea->EstadoRegistro;
+                }
+            }
+
+            if (isset($soapResponse->RespuestaLinea->EstadoRegistro, $soapResponse->RespuestaLinea->DescripcionErrorRegistro)) {
+                $response->errors[] = 'Error ' . $soapResponse->RespuestaLinea->CodigoErrorRegistro . ': ' . $soapResponse->RespuestaLinea->DescripcionErrorRegistro;
+                $response->aeatErrorCode = $soapResponse->RespuestaLinea->CodigoErrorRegistro;
+            }
+
+            if (isset($soapResponse->RespuestaLinea->RegistroDuplicado)) {
+                $response->duplicate = true;
+                $response->duplicateStatus = $soapResponse->RespuestaLinea->RegistroDuplicado->EstadoRegistroDuplicado;
+            }
+        }
+
+        if (isset($soapResponse->DatosPresentacion->TimestampPresentacion)) {
+            $response->timestamp = Carbon::parse($soapResponse->DatosPresentacion->TimestampPresentacion);
+        }
+        $response->request = $finalXml;
+        $response->response = $soapResponse ?? null;
+        $response->rawResponse = $soapClient->__getLastResponse();
+
+        return $response;
     }
 
     /**

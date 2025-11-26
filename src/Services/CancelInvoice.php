@@ -52,16 +52,16 @@ class CancelInvoice
         $dom = $this->document;
         $dom->formatOutput = true;
 
-        // RegistroAlta, required
-        $registroAlta = $dom->createElementNS($namespace, 'sf:RegistroAlta');
-        $dom->appendChild($registroAlta);
+        // RegistroAnulacion, required
+        $registroAnulacion = $dom->createElementNS($namespace, 'sf:RegistroAnulacion');
+        $dom->appendChild($registroAnulacion);
 
         // IDVersion, required
-        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:IDVersion', AEAT::VERSION));
+        $registroAnulacion->appendChild($dom->createElementNS($namespace, 'sf:IDVersion', AEAT::VERSION));
 
         // IDFactura, required
         $idFactura = $dom->createElementNS($namespace, 'sf:IDFactura');
-        $registroAlta->appendChild($idFactura);
+        $registroAnulacion->appendChild($idFactura);
         $idFactura->appendChild($dom->createElementNS($namespace, 'sf:IDEmisorFacturaAnulada', $cancellation->issuer->id));
         $idFactura->appendChild($dom->createElementNS($namespace, 'sf:NumSerieFacturaAnulada', $cancellation->invoiceNumber));
         $idFactura->appendChild($dom->createElementNS($namespace, 'sf:FechaExpedicionFacturaAnulada', $cancellation->getDate()));
@@ -69,11 +69,11 @@ class CancelInvoice
         if ($cancellation->hasGenerator()) {
             $generatorData = $cancellation->getGenerator();
             // GeneradoPor, optional
-            $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:GeneradoPor', $generatorData->generatorType->value));
+            $registroAnulacion->appendChild($dom->createElementNS($namespace, 'sf:GeneradoPor', $generatorData->generatorType->value));
 
             // Generador, required in case generator is set
             $generador = $dom->createElementNS($namespace, 'sf:Generador');
-            $registroAlta->appendChild($generador);
+            $registroAnulacion->appendChild($generador);
 
             $generador->appendChild($dom->createElementNS($namespace, 'sf:NombreRazon', $generatorData->name));
 
@@ -91,7 +91,7 @@ class CancelInvoice
 
         // Encadenamiento (required)
         $encadenamiento = $dom->createElementNS($namespace, 'sf:Encadenamiento');
-        $registroAlta->appendChild($encadenamiento);
+        $registroAnulacion->appendChild($encadenamiento);
 
         if ($cancellation->isFirstInvoice()) {
             // PrimerRegistro
@@ -111,17 +111,17 @@ class CancelInvoice
         $sistemaInformatico = self::buildInformationSystem($dom, $namespace, $this->settings->getInformationSystem());
 
         if ($sistemaInformatico !== false) {
-            $registroAlta->appendChild($sistemaInformatico);
+            $registroAnulacion->appendChild($sistemaInformatico);
         }
 
         // FechaHoraHusoGenRegistro
-        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:FechaHoraHusoGenRegistro', $cancellation->getTimestamp()));
+        $registroAnulacion->appendChild($dom->createElementNS($namespace, 'sf:FechaHoraHusoGenRegistro', $cancellation->getTimestamp()));
 
         // TipoHuella
-        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:TipoHuella', AEAT::SHA_256));
+        $registroAnulacion->appendChild($dom->createElementNS($namespace, 'sf:TipoHuella', AEAT::SHA_256));
 
         // Huella
-        $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:Huella', $cancellation->hash($cancellation->getTimestamp())));
+        $registroAnulacion->appendChild($dom->createElementNS($namespace, 'sf:Huella', $cancellation->hash($cancellation->getTimestamp())));
 
         $this->document = $dom;
         $this->generated = true;

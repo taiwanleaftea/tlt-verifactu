@@ -131,11 +131,14 @@ class SubmitInvoice
 
                 $idOtro->appendChild($dom->createElementNS($namespace, 'sf:CodigoPais', $recipient->countryCode));
                 $idOtro->appendChild($dom->createElementNS($namespace, 'sf:IDType', $recipient->idType->value));
+                $idOtro->appendChild($dom->createElementNS($namespace, 'sf:ID', $recipient->getId()));
+                /*
                 if ($invoice->isIntracommunityOperation()) {
                     $idOtro->appendChild($dom->createElementNS($namespace, 'sf:ID', $recipient->getId()));
                 } else {
                     $idOtro->appendChild($dom->createElementNS($namespace, 'sf:ID', $recipient->id));
                 }
+                */
             }
         }
 
