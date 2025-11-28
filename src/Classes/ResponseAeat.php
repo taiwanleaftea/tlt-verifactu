@@ -2,6 +2,7 @@
 
 namespace Taiwanleaftea\TltVerifactu\Classes;
 
+use Illuminate\Support\Carbon;
 use Taiwanleaftea\TltVerifactu\Enums\EstadoRegistro;
 
 /*
@@ -10,6 +11,7 @@ use Taiwanleaftea\TltVerifactu\Enums\EstadoRegistro;
 class ResponseAeat extends Response
 {
     public ?string $request = null;
+    public ?Carbon $timestamp = null;
     public mixed $response;
     public ?string $rawResponse = null;
     public ?EstadoRegistro $status = null;

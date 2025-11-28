@@ -71,6 +71,10 @@ class Verifactu
         ?Carbon $timestamp = null,
     ): ResponseAeat
     {
+        if (is_null($timestamp)) {
+            $timestamp = Carbon::now();
+        }
+
         $keys = ['number', 'date', 'description', 'type', 'amount', 'base', 'vat', 'rate'];
         if (($key = $this->checkArray($keys, $invoiceData)) !== true) {
             return $this->responseWithErrors('Invoice key ' . $key . ' is missing.');
@@ -86,7 +90,7 @@ class Verifactu
             taxableBase: $invoiceData['base'],
             taxAmount: $invoiceData['vat'],
             totalAmount: $invoiceData['amount'],
-            timestamp: $timestamp ?? Carbon::now(),
+            timestamp: $timestamp,
         );
 
         if (!$invoice->isSimplified()) {
@@ -190,6 +194,7 @@ class Verifactu
         $response->hash = $invoice->hash();
         $response->csv = $soapResponse->CSV ?? null;
         $response->json = json_encode($soapResponse, JSON_FORCE_OBJECT | JSON_PRETTY_PRINT);
+        $response->timestamp = $timestamp;
 
         if (!isset($soapResponse->EstadoEnvio)) {
             $response->errors[] = 'EstadoEnvio has not been received.';
@@ -257,6 +262,10 @@ class Verifactu
         ?Carbon $timestamp = null,
     )
     {
+        if (is_null($timestamp)) {
+            $timestamp = Carbon::now();
+        }
+
         $keys = ['number', 'date'];
         if (($key = $this->checkArray($keys, $invoiceData)) !== true) {
             return $this->responseWithErrors('Invoice cancellation key ' . $key . ' is missing.');
@@ -266,7 +275,7 @@ class Verifactu
             issuer: $issuer,
             invoiceNumber: $invoiceData['number'],
             invoiceDate: $invoiceData['date'],
-            timestamp: $timestamp ?? Carbon::now(),
+            timestamp: $timestamp,
         );
 
         if ($previous !== null) {
@@ -346,6 +355,7 @@ class Verifactu
         $response->hash = $invoice->hash();
         $response->csv = $soapResponse->CSV ?? null;
         $response->json = json_encode($soapResponse, JSON_FORCE_OBJECT | JSON_PRETTY_PRINT);
+        $response->timestamp = $timestamp;
 
         if (!isset($soapResponse->EstadoEnvio)) {
             $response->errors[] = 'EstadoEnvio has not been received.';
