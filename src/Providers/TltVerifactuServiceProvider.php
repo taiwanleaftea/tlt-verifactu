@@ -6,6 +6,7 @@ namespace Taiwanleaftea\TltVerifactu\Providers;
 
 use Illuminate\Foundation\Console\AboutCommand;
 use Illuminate\Support\ServiceProvider;
+use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
 use Taiwanleaftea\TltVerifactu\Support\Verifactu;
 
 /**
@@ -18,7 +19,7 @@ class TltVerifactuServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        AboutCommand::add('TLT Verifactu', fn() => ['Version' => Verifactu::VERSION]);
+        AboutCommand::add('TLT Verifactu', fn() => ['Version' => VerifactuSettings::VERSION]);
 
         $this->publishes([
             __DIR__.'/../../config/tlt-verifactu.php' => config_path('tlt-verifactu.php'),
