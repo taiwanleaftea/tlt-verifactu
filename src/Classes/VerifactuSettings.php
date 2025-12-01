@@ -9,7 +9,7 @@ use Taiwanleaftea\TltVerifactu\Enums\IdType;
 
 class VerifactuSettings
 {
-    public const string VERSION = '0.1.0';
+    public const string VERSION = '1.0.1';
     public const string SYSTEM_ID = '01';
     private InformationSystem $informationSystem;
     private bool $production;
