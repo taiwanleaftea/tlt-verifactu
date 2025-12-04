@@ -11,6 +11,7 @@ use chillerlan\QRCode\QRCode as QRCodeRender;
 use chillerlan\QRCode\QROptions;
 use Illuminate\Support\Carbon;
 use Taiwanleaftea\TltVerifactu\Constants\AEAT;
+use Taiwanleaftea\TltVerifactu\Enums\QRCodeFormat;
 use Taiwanleaftea\TltVerifactu\Exceptions\QRGeneratorException;
 
 class QRCode
@@ -98,6 +99,39 @@ class QRCode
         ]);
 
         return $url . $query;
+    }
+
+    /**
+     * Generate QR code from URI
+     *
+     * @param string $uri
+     * @param QRCodeFormat $format
+     * @return string
+     *
+     * @throws QRGeneratorException
+     */
+    public static function fromURI(
+        string $uri,
+        QRCodeFormat $format
+    ): string
+    {
+        if ($format === QRCodeFormat::SVG) {
+            $render = self::buildQRRender(QRMarkupSVG::class);
+        } elseif ($format === QRCodeFormat::PNG) {
+            if (extension_loaded('gd') && function_exists('gd_info')) {
+                $outputInterface = QRGdImagePNG::class;
+            } elseif (extension_loaded('imagick')) {
+                $outputInterface = QRImagick::class;
+            } else {
+                throw new QRGeneratorException('Image library not loaded.');
+            }
+
+            $render = self::buildQRRender($outputInterface, true);
+        } else {
+            throw new QRGeneratorException('Unsupported renderer format.');
+        }
+
+        return $render->render($uri);
     }
 
     /**

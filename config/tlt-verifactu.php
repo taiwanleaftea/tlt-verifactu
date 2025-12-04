@@ -16,4 +16,7 @@ return [
     'provider_nif' => '12312367X',
     'provider_country' => 'ES',
     'provider_certificate_type' => \Taiwanleaftea\TltVerifactu\Enums\IdType::NIF,
+
+    // Return values
+    'generate_svg' => false,
 ];

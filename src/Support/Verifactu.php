@@ -206,7 +206,17 @@ class Verifactu
                 $response->status = EstadoRegistro::tryFrom($soapResponse->RespuestaLinea->EstadoRegistro);
             }
 
-            $response->qrSVG = QRCode::SVG(
+            if (config('tlt-verifactu.generate_svg')) {
+                $response->qrSVG = QRCode::SVG(
+                    issuerNIF: $invoice->issuer->id,
+                    invoiceDate: $invoice->invoiceDate,
+                    number: $invoice->invoiceNumber,
+                    totalAmount: $invoice->totalAmount,
+                    isProduction: $this->settings->isProduction()
+                );
+            }
+
+            $response->qrURI = QRCode::buildUrl(
                 issuerNIF: $invoice->issuer->id,
                 invoiceDate: $invoice->invoiceDate,
                 number: $invoice->invoiceNumber,
@@ -252,7 +262,9 @@ class Verifactu
      * @param array $previous
      * @param Generator|null $generator
      * @param Carbon|null $timestamp
-     * @return ResponseAeat|void
+     *
+     * @return ResponseAeat
+     *
      * @throws CertificateException
      */
     public function cancelInvoice(
@@ -261,7 +273,7 @@ class Verifactu
         array $previous,
         ?Generator $generator = null,
         ?Carbon $timestamp = null,
-    )
+    ): ResponseAeat
     {
         if (is_null($timestamp)) {
             $timestamp = Carbon::now();
@@ -404,6 +416,7 @@ class Verifactu
      * @param Carbon $invoiceDate
      * @param string $number
      * @param float $totalAmount
+     *
      * @return string
      */
     public function generateQrSVG(
@@ -434,6 +447,24 @@ class Verifactu
     ): string
     {
         return QRCode::PNG($issuerNIF, $invoiceDate, $number, $totalAmount, $this->settings->isProduction());
+    }
+
+    /**
+     * @param string $issuerNIF
+     * @param Carbon $invoiceDate
+     * @param string $number
+     * @param float $totalAmount
+     *
+     * @return string
+     */
+    public function generateQrURI(
+        string $issuerNIF,
+        Carbon $invoiceDate,
+        string $number,
+        float $totalAmount,
+    ): string
+    {
+        return QRCode::buildUrl($issuerNIF, $invoiceDate, $number, $totalAmount);
     }
 
     /**

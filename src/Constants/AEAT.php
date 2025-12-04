@@ -16,8 +16,8 @@ class AEAT
     /*
      * QR Verification service
      */
-    public const string QR_VERIFICATION_SANDBOX = 'https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR?';
-    public const string QR_VERIFICATION_PRODUCTION = 'https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR?';
+    public const string QR_VERIFICATION_PRODUCTION = 'https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR?';
+    public const string QR_VERIFICATION_SANDBOX = 'https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR?';
 
     /*
      * XSD namespaces

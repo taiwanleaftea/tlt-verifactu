@@ -11,6 +11,11 @@ your system yourself.
 PHP 8.3 or above with the dom, json, libxml, openssl, and soap extensions installed and enabled. 
 Laravel 11 or 12 is required.
 
+### Requirements for QR Code Generator
+- [`ext-gd`](https://www.php.net/manual/book.image) for `Gdlib` based output **or**
+- [`ext-imagick`](https://github.com/Imagick/imagick) with [ImageMagick](https://imagemagick.org) installed
+- [`ext-fileinfo`](https://www.php.net/manual/book.fileinfo.php) required by `Imagick` output
+
 ### OpenSSL Configuration
 The Spanish FNMT certification authority uses outdated encryption algorithms that are not supported by 
 OpenSSL 3.0 and above.
@@ -134,7 +139,8 @@ echo $result->json; // JSON response from the SOAP client
 if ($result->success) {
     echo 'Success';
     echo $result->csv; // CSV code from AEAT
-    echo $result->qrSVG;
+    echo $result->qrSVG; // QR code as SVG string
+    echo $result->qrURI; // Full qualified URI for further QR code generation 
 } else {
     if ($result->status == EstadoRegistro::ACCEPTED_ERRORES) {
         // Invoice was registered with errors

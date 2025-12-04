@@ -21,5 +21,6 @@ class ResponseAeat extends Response
     public string $duplicateStatus;
     public ?string $hash = null;
     public ?string $qrSVG = null;
+    public ?string $qrURI = null;
     public string $json = '';
 }
