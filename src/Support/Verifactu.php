@@ -23,6 +23,7 @@ use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
 use Taiwanleaftea\TltVerifactu\Exceptions\CertificateException;
 use Taiwanleaftea\TltVerifactu\Exceptions\GeneratorException;
 use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
+use Taiwanleaftea\TltVerifactu\Exceptions\QRGeneratorException;
 use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
 use Taiwanleaftea\TltVerifactu\Exceptions\SoapClientException;
 use Taiwanleaftea\TltVerifactu\Services\CancelInvoice;
@@ -413,6 +414,26 @@ class Verifactu
     ): string
     {
         return QRCode::SVG($issuerNIF, $invoiceDate, $number, $totalAmount, $this->settings->isProduction());
+    }
+
+    /**
+     * @param string $issuerNIF
+     * @param Carbon $invoiceDate
+     * @param string $number
+     * @param float $totalAmount
+     *
+     * @return string
+     *
+     * @throws QRGeneratorException
+     */
+    public function generateQrPNG(
+        string $issuerNIF,
+        Carbon $invoiceDate,
+        string $number,
+        float $totalAmount,
+    ): string
+    {
+        return QRCode::PNG($issuerNIF, $invoiceDate, $number, $totalAmount, $this->settings->isProduction());
     }
 
     /**

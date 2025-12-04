@@ -3,7 +3,7 @@ A Laravel package for EU VAT validation and VERIFACTU support. This package can 
 invoicing system (SIF). You must submit the declaration of responsibility (declaración responsable) for 
 your system yourself.
 
-**Please note Canary, Ceuta and Melilla tax modes are not supported.**
+**Please note: Canary, Ceuta and Melilla tax modes are not supported.**
 
 ## Installation
 
@@ -57,9 +57,10 @@ and `VERIFACTU_DISK` (the disk where SSL certificates are stored).
 use Taiwanleaftea\TltVerifactu\Support\VatValidator
 
 // Offline validation by format
-echo VatValidator::formatValid('ES', '12345678X');
+echo VatValidator::formatValid('ES', 'B12345678');
+
 // Online validation via the VIES service
-$response = VatValidator::online('ES', '12345678X');
+$response = VatValidator::online('ES', 'B12345678');
 if ($response->success) {
     // VAT number present in the VIES database
     echo $response->valid;
@@ -92,8 +93,8 @@ use Taiwanleaftea\TltVerifactu\Exceptions\CertificateException;
 use Taiwanleaftea\TltVerifactu\Support\Facades\Verifactu;
 
 $certificate = new Certificate('certificate.p12', 'password');
-$issuer = new LegalPerson('XYZ SA', '23456789X', 'ES', IdType::NIF);
-$recipient = new Recipient('ABC SL', '12345678X', 'ES', IdType::NIF);
+$issuer = new LegalPerson('XYZ SA', 'A12345678', 'ES', IdType::NIF);
+$recipient = new Recipient('ABC SL', 'B12345678', 'ES', IdType::NIF);
 Verifactu::config($certificate);
 
 $previous = [
@@ -150,7 +151,16 @@ if ($result->success) {
 
 #### Cancel Invoice
 ```php
+use Illuminate\Support\Carbon;
+use Taiwanleaftea\TltVerifactu\Classes\Certificate;
+use Taiwanleaftea\TltVerifactu\Classes\LegalPerson;
+use Taiwanleaftea\TltVerifactu\Enums\EstadoRegistro;
+use Taiwanleaftea\TltVerifactu\Enums\IdType;
+use Taiwanleaftea\TltVerifactu\Exceptions\CertificateException;
+use Taiwanleaftea\TltVerifactu\Support\Facades\Verifactu;
+
 Verifactu::config($certificate);
+$issuer = new LegalPerson('XYZ SA', 'A12345678', 'ES', IdType::NIF);
 
 $previous = [
     'number' => '2025/2',
@@ -163,11 +173,16 @@ $invoice = [
     'date' => Carbon::createFromFormat('Y-m-d', '2025-01-12'),
 ];
 
-$result = Verifactu::cancelInvoice(
-    issuer: $issuer,
-    invoiceData: $invoice,
-    previous: $previous,
-);
+try {
+    $result = Verifactu::cancelInvoice(
+        issuer: $issuer,
+        invoiceData: $invoice,
+        previous: $previous,
+    );
+} catch (CertificateException $e) {
+    echo $e->getMessage();
+    exit();
+}
 
 echo $result->hash;
 echo $result->json;
@@ -182,9 +197,36 @@ if ($result->success) {
 
     echo 'Errors:' . PHP_EOL;
     foreach ($result->errors as $error) {
-        $this->error($error);
+        echo $error;
     }
 }
+```
+
+## QR Code Generation
+```php
+use Illuminate\Support\Carbon;
+use Taiwanleaftea\TltVerifactu\Support\Facades\Verifactu;
+use Taiwanleaftea\TltVerifactu\Exceptions\QRGeneratorException;
+
+// base64 encoded PNG
+try {
+    $qrcode = Verifactu::generateQrPNG(
+        issuerNIF: 'A12345678',
+        invoiceDate: Carbon::createFromFormat('Y-m-d', '2025-01-12'),
+        number: '2025/2',
+        totalAmount: '121.00',
+    );
+} catch (QRGeneratorException $e) {
+    echo $e->getMessage();
+}
+
+// QR code in SVG format
+$qrcode = Verifactu::generateQrSVG(
+    issuerNIF: 'A12345678',
+    invoiceDate: Carbon::createFromFormat('Y-m-d', '2025-01-12'),
+    number: '2025/2',
+    totalAmount: '121.00',
+);
 ```
 
 # License
