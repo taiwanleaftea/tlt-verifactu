@@ -144,7 +144,7 @@ class QRCode
     {
         $options = new QROptions();
         $options->version = 7;
-        $options->outputInteface = $outputInterface;
+        $options->outputInterface = $outputInterface;
 
         if ($outputInterface == QRImagick::class) {
             $options->imagickFormat = 'png';
