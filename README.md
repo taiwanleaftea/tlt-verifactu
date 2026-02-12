@@ -59,7 +59,7 @@ and `VERIFACTU_DISK` (the disk where SSL certificates are stored).
 ### VAT Number Validator
 
 ```php
-use Taiwanleaftea\TltVerifactu\Support\VatValidator
+use Taiwanleaftea\TltVerifactu\Support\Facades\VatValidator
 
 // Offline validation by format
 echo VatValidator::formatValid('ES', 'B12345678');
