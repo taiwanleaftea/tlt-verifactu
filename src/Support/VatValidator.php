@@ -72,10 +72,10 @@ class VatValidator
      * Validate VAT number by format
      *
      * @param string $country
-     * @param string $vatNumber
+     * @param string|null $vatNumber
      * @return bool
      */
-    public function formatValid(string $country, string $vatNumber): bool
+    public function formatValid(string $country, ?string $vatNumber): bool
     {
         return Vat::validateFormat($country, $vatNumber);
     }
@@ -84,12 +84,16 @@ class VatValidator
      * Sanitize VAT string
      *
      * @param string $country
-     * @param string $vatNumber
+     * @param string|null $vatNumber
      * @param bool $removeCountry
-     * @return string
+     * @return string|null
      */
-    public function sanitize(string $country, string $vatNumber, bool $removeCountry = false): string
+    public function sanitize(string $country, ?string $vatNumber, bool $removeCountry = false): ?string
     {
+        if ($vatNumber === '' || $vatNumber === null) {
+            return $vatNumber;
+        }
+
         if ($removeCountry) {
             return Str::of($vatNumber)->trim()->replace([$country, ' ', '.', '-', '_'], '', false)->upper()->toString();
         } else {

@@ -49,12 +49,12 @@ class Vat
      * Validate a VAT number format
      *
      * @param string $country
-     * @param string $vatNumber
+     * @param string|null $vatNumber
      * @return boolean
      */
-    public static function validateFormat(string $country, string $vatNumber): bool
+    public static function validateFormat(string $country, ?string $vatNumber): bool
     {
-        if ($vatNumber === '') {
+        if ($vatNumber === '' || $vatNumber === null) {
             return false;
         }
 
