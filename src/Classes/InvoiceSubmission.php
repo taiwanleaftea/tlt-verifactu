@@ -207,19 +207,22 @@ class InvoiceSubmission extends Invoice
      */
     public function hash(?string $timestamp = null): string
     {
-        if (! isset($this->hash)) {
-            $parts = [
-                'IDEmisorFactura='.$this->issuer->id,
-                'NumSerieFactura='.$this->invoiceNumber,
-                'FechaExpedicionFactura='.$this->invoiceDate->format('d-m-Y'),
-                'TipoFactura='.$this->type->value,
-                'CuotaTotal='.$this->normalizeDecimal($this->taxAmount),
-                'ImporteTotal='.$this->normalizeDecimal($this->totalAmount),
-                'Huella='.$this->previousHash,
-                is_null($timestamp) ? 'FechaHoraHusoGenRegistro='.$this->getTimestamp() : 'FechaHoraHusoGenRegistro='.$timestamp,
-            ];
+        $parts = [
+            'IDEmisorFactura='.$this->issuer->id,
+            'NumSerieFactura='.$this->invoiceNumber,
+            'FechaExpedicionFactura='.$this->invoiceDate->format('d-m-Y'),
+            'TipoFactura='.$this->type->value,
+            'CuotaTotal='.$this->normalizeDecimal($this->taxAmount),
+            'ImporteTotal='.$this->normalizeDecimal($this->totalAmount),
+            'Huella='.$this->previousHash,
+            is_null($timestamp) ? 'FechaHoraHusoGenRegistro='.$this->getTimestamp() : 'FechaHoraHusoGenRegistro='.$timestamp,
+        ];
 
-            $this->hash = Str::upper(hash('sha256', implode('&', $parts)));
+        $source = implode('&', $parts);
+
+        if ($this->hashSource !== $source) {
+            $this->hashSource = $source;
+            $this->hash = Str::upper(hash('sha256', $source));
         }
 
         return $this->hash;

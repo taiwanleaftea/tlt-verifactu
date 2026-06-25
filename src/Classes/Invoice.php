@@ -20,7 +20,9 @@ abstract class Invoice
 
     public Carbon $timestamp;
 
-    protected ?string $hash;
+    protected ?string $hash = null;
+
+    protected ?string $hashSource = null;
 
     // Previous invoice
     protected bool $firstInvoice = true;

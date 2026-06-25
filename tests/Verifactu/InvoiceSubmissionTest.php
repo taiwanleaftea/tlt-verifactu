@@ -61,6 +61,35 @@ class InvoiceSubmissionTest extends TestCase
         $this->assertTrue($validation['result'], 'XML StandardESRecipientESProvider validation failed.'.PHP_EOL.$validation['errors']);
     }
 
+    public function test_verifactu_envelope_does_not_add_xml_signature()
+    {
+        $settings = new VerifactuSettings;
+        $issuer = new LegalPerson('Issuer Name', '89890001K');
+
+        $invoice = new InvoiceSubmission(
+            $issuer,
+            '12345678/G33',
+            Carbon::createFromFormat('d-m-Y', '01-01-2024'),
+            'Description',
+            InvoiceType::STANDARD,
+            21,
+            110,
+            12.35,
+            123.45,
+            Carbon::parse('2024-01-01T19:20:30+01:00')
+        );
+
+        $invoice->setRecipient(new Recipient($this->recipientName, $this->recipientId, 'ES', IdType::NIF));
+        $invoice->setOperationQualification(OperationQualificationType::SUBJECT_DIRECT);
+
+        $submitInvoice = new SubmitInvoice($settings);
+        $submitInvoice->getXml($invoice);
+        $dom = $submitInvoice->createEnvelopedXml($issuer);
+
+        $this->assertStringContainsString('<sfLR:RegFactuSistemaFacturacion', $dom->saveXML());
+        $this->assertStringNotContainsString('<ds:Signature', $dom->saveXML());
+    }
+
     public function test_simplified_es_provider()
     {
         $settings = new VerifactuSettings;

@@ -6,24 +6,36 @@ namespace Taiwanleaftea\TltVerifactu\Classes;
 
 use Taiwanleaftea\TltVerifactu\Constants\AEAT;
 use Taiwanleaftea\TltVerifactu\Enums\IdType;
+use Taiwanleaftea\TltVerifactu\Enums\VerifactuMode;
 
 class VerifactuSettings
 {
-    public const string VERSION = '1.0.1';
+    public const string VERSION = '2.1.0';
 
     public const string SYSTEM_ID = '01';
 
     private InformationSystem $informationSystem;
 
+    private VerifactuMode $mode;
+
+    private ?string $registryScope;
+
+    private bool $onlineSignRecords;
+
+    private bool $allowRepresentativeCertificate;
+
     private bool $production;
 
     public function __construct()
     {
+        $providerIdType = config('tlt-verifactu.provider_id_type')
+            ?? config('tlt-verifactu.provider_certificate_type', IdType::NIF);
+
         $provider = new LegalPerson(
             config('tlt-verifactu.provider_name', 'Software Provider Ltd'),
             config('tlt-verifactu.provider_nif', '12312367X'),
             config('tlt-verifactu.provider_country', 'ES'),
-            config('tlt-verifactu.provider_certificate_type', IdType::NIF),
+            $providerIdType,
         );
 
         $this->informationSystem = new InformationSystem(
@@ -38,6 +50,15 @@ class VerifactuSettings
         );
 
         $this->production = config('tlt-verifactu.production', false);
+        $this->mode = VerifactuMode::fromConfig(config('tlt-verifactu.mode', VerifactuMode::ONLINE->value));
+
+        $registryScope = config('tlt-verifactu.registry_scope');
+        $this->registryScope = $registryScope === null || $registryScope === ''
+            ? null
+            : (string) $registryScope;
+
+        $this->onlineSignRecords = (bool) config('tlt-verifactu.online_sign_records', false);
+        $this->allowRepresentativeCertificate = (bool) config('tlt-verifactu.allow_representative_certificate', false);
     }
 
     /**
@@ -54,6 +75,62 @@ class VerifactuSettings
     public function isProduction(): bool
     {
         return $this->production;
+    }
+
+    /**
+     * Get VERIFACTU operating mode
+     */
+    public function getMode(): VerifactuMode
+    {
+        return $this->mode;
+    }
+
+    /**
+     * Check if records should be sent to AEAT immediately
+     */
+    public function sendsRecordsOnline(): bool
+    {
+        return $this->mode->sendsRecordsOnline();
+    }
+
+    /**
+     * Check if records should only be stored in the local registry
+     */
+    public function storesRecordsOnly(): bool
+    {
+        return $this->mode->storesRecordsOnly();
+    }
+
+    /**
+     * Check if locally stored records must be XAdES-EPES signed
+     */
+    public function signsStoredRecords(): bool
+    {
+        return $this->mode->signsStoredRecords();
+    }
+
+    /**
+     * Get local registry chain scope
+     */
+    public function getRegistryScope(): ?string
+    {
+        return $this->registryScope;
+    }
+
+    /**
+     * Check if online VERIFACTU records should be XAdES-EPES signed before SOAP submission
+     */
+    public function signsOnlineRecords(): bool
+    {
+        return $this->onlineSignRecords;
+    }
+
+    /**
+     * Check if an authorized representative certificate can be used for issuer records
+     */
+    public function allowsRepresentativeCertificate(): bool
+    {
+        return $this->allowRepresentativeCertificate;
     }
 
     /**

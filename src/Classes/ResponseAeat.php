@@ -12,9 +12,11 @@ class ResponseAeat extends Response
 {
     public ?string $request = null;
 
+    public ?string $signedRequest = null;
+
     public ?Carbon $timestamp = null;
 
-    public mixed $response;
+    public mixed $response = null;
 
     public ?string $rawResponse = null;
 
@@ -24,9 +26,9 @@ class ResponseAeat extends Response
 
     public ?int $aeatErrorCode = null;
 
-    public bool $duplicate;
+    public bool $duplicate = false;
 
-    public string $duplicateStatus;
+    public string $duplicateStatus = '';
 
     public ?string $hash = null;
 
@@ -35,4 +37,8 @@ class ResponseAeat extends Response
     public ?string $qrURI = null;
 
     public string $json = '';
+
+    public ?int $registryRecordId = null;
+
+    public bool $storedOnly = false;
 }

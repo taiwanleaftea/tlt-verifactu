@@ -58,6 +58,55 @@ class HashGeneratorTest extends TestCase
         $this->assertEquals('F7B94CFD8924EDFF273501B01EE5153E4CE8F259766F88CF6ACB8935802A2B97', $hash, 'Submission hash must be equal with AEAT example 2.');
     }
 
+    public function test_submission_hash_uses_requested_timestamp_each_time()
+    {
+        $invoice = new InvoiceSubmission(
+            new LegalPerson('Issuer Name', '89890001K'),
+            '12345678/G33',
+            Carbon::createFromFormat('d-m-Y', '01-01-2024'),
+            'Description',
+            InvoiceType::STANDARD,
+            21,
+            110,
+            12.35,
+            123.45,
+            Carbon::now()
+        );
+
+        $firstHash = $invoice->hash('2024-01-01T19:20:30+01:00');
+        $secondHash = $invoice->hash('2024-01-01T19:20:31+01:00');
+
+        $this->assertNotSame($firstHash, $secondHash);
+    }
+
+    public function test_submission_hash_recalculates_when_previous_hash_changes()
+    {
+        $invoice = new InvoiceSubmission(
+            new LegalPerson('Issuer Name', '89890001K'),
+            '12345679/G34',
+            Carbon::createFromFormat('d-m-Y', '01-01-2024'),
+            'Description',
+            InvoiceType::STANDARD,
+            21,
+            110,
+            12.35,
+            123.45,
+            Carbon::now()
+        );
+
+        $firstRecordHash = $invoice->hash('2024-01-01T19:20:35+01:00');
+        $invoice->setPreviousInvoice(
+            number: '12345678/G33',
+            date: Carbon::createFromFormat('d-m-Y', '01-01-2024'),
+            hash: '3C464DAF61ACB827C65FDA19F352A4E3BDC2C640E9E9FC4CC058073F38F12F60',
+        );
+
+        $chainedHash = $invoice->hash('2024-01-01T19:20:35+01:00');
+
+        $this->assertNotSame($firstRecordHash, $chainedHash);
+        $this->assertEquals('F7B94CFD8924EDFF273501B01EE5153E4CE8F259766F88CF6ACB8935802A2B97', $chainedHash);
+    }
+
     public function test_cancellation()
     {
         $issuer = new LegalPerson(
@@ -75,5 +124,25 @@ class HashGeneratorTest extends TestCase
         $hash = $invoice->hash('2024-01-01T19:20:40+01:00');
 
         $this->assertEquals('177547C0D57AC74748561D054A9CEC14B4C4EA23D1BEFD6F2E69E3A388F90C68', $hash, 'Cancellation hash must be equal with AEAT example 3.');
+    }
+
+    public function test_cancellation_hash_uses_previous_record_hash_from_chain()
+    {
+        $previousHash = 'F7B94CFD8924EDFF273501B01EE5153E4CE8F259766F88CF6ACB8935802A2B97';
+        $invoice = new InvoiceCancellation(
+            new LegalPerson('Issuer Name', '89890001K'),
+            '12345679/G34',
+            Carbon::createFromFormat('d-m-Y', '01-01-2024'),
+        );
+
+        $invoice->setPreviousInvoice(
+            number: '12345679/G34',
+            date: Carbon::createFromFormat('d-m-Y', '01-01-2024'),
+            hash: $previousHash,
+        );
+
+        $hash = $invoice->hash('2024-01-01T19:20:40+01:00');
+
+        $this->assertEquals('177547C0D57AC74748561D054A9CEC14B4C4EA23D1BEFD6F2E69E3A388F90C68', $hash);
     }
 }

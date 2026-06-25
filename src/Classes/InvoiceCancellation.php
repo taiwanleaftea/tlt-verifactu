@@ -12,8 +12,6 @@ class InvoiceCancellation extends Invoice
 {
     protected Generator $generator;
 
-    protected string $invoiceHash;
-
     public function __construct(
         LegalPerson $issuer,
         string $invoiceNumber,
@@ -24,7 +22,7 @@ class InvoiceCancellation extends Invoice
         $this->issuer = $issuer;
         $this->invoiceNumber = Str::trim($invoiceNumber);
         $this->invoiceDate = $invoiceDate;
-        $this->invoiceHash = $invoiceHash;
+        $this->previousHash = $invoiceHash;
         $this->timestamp = $timestamp ?? Carbon::now();
     }
 
@@ -67,10 +65,17 @@ class InvoiceCancellation extends Invoice
             'IDEmisorFacturaAnulada='.$this->issuer->id,
             'NumSerieFacturaAnulada='.$this->invoiceNumber,
             'FechaExpedicionFacturaAnulada='.$this->invoiceDate->format('d-m-Y'),
-            'Huella='.$this->invoiceHash,
+            'Huella='.$this->previousHash,
             is_null($timestamp) ? 'FechaHoraHusoGenRegistro='.$this->getTimestamp() : 'FechaHoraHusoGenRegistro='.$timestamp,
         ];
 
-        return Str::upper(hash('sha256', implode('&', $parts)));
+        $source = implode('&', $parts);
+
+        if ($this->hashSource !== $source) {
+            $this->hashSource = $source;
+            $this->hash = Str::upper(hash('sha256', $source));
+        }
+
+        return $this->hash;
     }
 }

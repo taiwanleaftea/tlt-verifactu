@@ -56,11 +56,79 @@ php artisan vendor:publish --tag=tlt-verifactu --ansi --force
 The package will be installed, and `config/tlt-verifactu.php` will be published.
 
 Edit the published config file and replace the software provider and system values (`provider_name`, `provider_nif`,
-`provider_country`, `system_name`, etc.) with the values for your invoicing system. These values are intentionally
-plain Laravel config values because each application should commit the SIF/provider configuration it uses.
+`provider_country`, `provider_id_type`, `system_name`, etc.) with the values for your invoicing system. These values
+are intentionally plain Laravel config values because each application should commit the SIF/provider configuration it uses.
+
+If you use the local registry (`registry` or `no_verifactu` mode), run the package migration:
+
+```bash
+php artisan migrate
+```
+
+You can also publish the migration first:
+
+```bash
+php artisan vendor:publish --tag=tlt-verifactu-migrations --ansi
+```
 
 Open your `.env` file and add `VERIFACTU_PRODUCTION` (set it to `true` to use the production AEAT server)
-and `VERIFACTU_DISK` (the disk where SSL certificates are stored).
+and `VERIFACTU_DISK` (the disk where certificates are stored). `VERIFACTU_MODE` can be used to select the operating
+mode, and `VERIFACTU_REGISTRY_SCOPE` can be used to separate local registry chains for different SIF instances.
+
+### VERIFACTU Configuration
+
+The package supports three operating modes:
+
+```php
+'mode' => env('VERIFACTU_MODE', VerifactuMode::ONLINE->value),
+```
+
+- `online`: sends records to AEAT immediately. Records are not XAdES-signed by default.
+- `registry`: creates and stores unsigned local records in `verifactu_records`.
+- `no_verifactu`: creates local records, signs each record with XAdES-EPES, and stores both unsigned and signed XML.
+
+Optional local registry scope:
+
+```php
+'registry_scope' => env('VERIFACTU_REGISTRY_SCOPE'),
+```
+
+Leave it `null` for a single SIF chain. Set a stable value when one backend must keep separate local chains for
+different SIF instances.
+
+Optional online record signing:
+
+```php
+'online_sign_records' => false,
+```
+
+This is intentionally a config-only option. Set it to `true` only if you want online VERIFACTU records to be signed
+with XAdES-EPES before SOAP submission.
+
+Representative/apoderado certificates:
+
+```php
+'allow_representative_certificate' => false,
+```
+
+By default, the package checks that the certificate subject NIF matches the invoice issuer NIF before online submission
+or no VERIFACTU signing. Set this config-only option to `true` only when the certificate belongs to an authorized
+representative (`apoderado` or `colaborador social`) for that issuer.
+
+### Local Registry Database
+
+The package provides a `verifactu_records` table for local registry storage. It stores:
+
+- invoice identity and issuer data;
+- record type (`alta` or `anulacion`) and invoice type;
+- local chain data (`hash`, `previous_hash`, `previous_record_id`, `registry_scope`);
+- generated unsigned XML in `request_xml`;
+- XAdES-signed XML in `signed_xml` for `no_verifactu` mode;
+- signature policy and certificate metadata;
+- AEAT response fields for future export/submission workflows;
+- `created_at` and `updated_at` timestamps.
+
+If the table already exists, the migration fails with a clear message instead of overwriting an existing registry.
 
 ## Usage
 
@@ -215,6 +283,50 @@ if ($result->success) {
     }
 }
 ```
+
+#### Local Registry and No VERIFACTU
+
+For a local unsigned registry, set:
+
+```php
+'mode' => VerifactuMode::REGISTRY->value,
+```
+
+`submitInvoice()` and `cancelInvoice()` will generate the VERIFACTU record XML and save it in `verifactu_records`
+without calling AEAT. The response includes:
+
+```php
+echo $result->registryRecordId;
+echo $result->hash;
+echo $result->request; // unsigned RegistroAlta or RegistroAnulacion XML
+```
+
+For a no VERIFACTU registry, set:
+
+```php
+'mode' => VerifactuMode::NO_VERIFACTU->value,
+```
+
+Then configure a signing certificate before generating records:
+
+```php
+use Taiwanleaftea\TltVerifactu\Classes\Certificate;
+use Taiwanleaftea\TltVerifactu\Support\Facades\Verifactu;
+
+$certificate = new Certificate('certificate.p12', 'password');
+Verifactu::config($certificate);
+```
+
+In `no_verifactu` mode, every `RegistroAlta` and `RegistroAnulacion` is signed immediately with XAdES-EPES and stored
+with signature metadata:
+
+```php
+echo $result->request; // unsigned XML
+echo $result->signedRequest; // XAdES-EPES signed XML
+```
+
+The package currently stores the no VERIFACTU registry but does not yet provide an export/remisión por requerimiento
+builder.
 
 ## QR Code Generation
 

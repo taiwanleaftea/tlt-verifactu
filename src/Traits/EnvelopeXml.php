@@ -12,7 +12,7 @@ use Taiwanleaftea\TltVerifactu\Exceptions\XmlGenerationException;
 trait EnvelopeXml
 {
     /**
-     * Create Cabecera in accordance with VERIFACTU format for signed XML
+     * Create Cabecera in accordance with VERIFACTU format
      *
      * @throws \DOMException
      */
@@ -22,7 +22,7 @@ trait EnvelopeXml
             throw new XmlGenerationException('XML must be generated first.');
         }
 
-        $signedDom = $this->document;
+        $registroDom = $this->document;
 
         $envelopedDom = new DOMDocument('1.0', 'UTF-8');
         $envelopedDom->formatOutput = true;
@@ -45,7 +45,7 @@ trait EnvelopeXml
         $registroFactura = $envelopedDom->createElementNS(AEAT::SFLR_NAMESPACE, 'sfLR:RegistroFactura');
         $root->appendChild($registroFactura);
 
-        $imported = $envelopedDom->importNode($signedDom->documentElement, true);
+        $imported = $envelopedDom->importNode($registroDom->documentElement, true);
         $registroFactura->appendChild($imported);
 
         $this->document = $envelopedDom;

@@ -20,9 +20,15 @@ class TltVerifactuServiceProvider extends ServiceProvider
     {
         AboutCommand::add('TLT Verifactu', fn () => ['Version' => VerifactuSettings::VERSION]);
 
+        $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
+
         $this->publishes([
             __DIR__.'/../../config/tlt-verifactu.php' => config_path('tlt-verifactu.php'),
         ], 'tlt-verifactu');
+
+        $this->publishes([
+            __DIR__.'/../../database/migrations' => database_path('migrations'),
+        ], 'tlt-verifactu-migrations');
     }
 
     /**
