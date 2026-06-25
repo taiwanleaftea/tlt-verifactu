@@ -10,10 +10,8 @@ use Taiwanleaftea\TltVerifactu\Exceptions\GeneratorException;
 
 class InvoiceCancellation extends Invoice
 {
-    /**
-     * @var Generator
-     */
     protected Generator $generator;
+
     protected string $invoiceHash;
 
     public function __construct(
@@ -21,9 +19,8 @@ class InvoiceCancellation extends Invoice
         string $invoiceNumber,
         Carbon $invoiceDate,
         string $invoiceHash = '',
-        Carbon $timestamp = null,
-    )
-    {
+        ?Carbon $timestamp = null,
+    ) {
         $this->issuer = $issuer;
         $this->invoiceNumber = Str::trim($invoiceNumber);
         $this->invoiceDate = $invoiceDate;
@@ -33,9 +30,6 @@ class InvoiceCancellation extends Invoice
 
     /**
      * Set generator data for invoice cancellation
-     *
-     * @param Generator $generator
-     * @return void
      */
     public function setGenerator(Generator $generator): void
     {
@@ -44,8 +38,6 @@ class InvoiceCancellation extends Invoice
 
     /**
      * Invoice cancellation has generator
-     *
-     * @return bool
      */
     public function hasGenerator(): bool
     {
@@ -55,12 +47,11 @@ class InvoiceCancellation extends Invoice
     /**
      * Get generator for invoice cancellation
      *
-     * @return Generator
      * @throws GeneratorException
      */
     public function getGenerator(): Generator
     {
-        if (!isset($this->generator)) {
+        if (! isset($this->generator)) {
             throw new GeneratorException('Recipient not found.');
         }
 
@@ -69,18 +60,15 @@ class InvoiceCancellation extends Invoice
 
     /**
      * Hash generator for cancellation
-     *
-     * @param string|null $timestamp
-     * @return string
      */
-    public function hash(string $timestamp = null): string
+    public function hash(?string $timestamp = null): string
     {
         $parts = [
-            'IDEmisorFacturaAnulada=' . $this->issuer->id,
-            'NumSerieFacturaAnulada=' . $this->invoiceNumber,
-            'FechaExpedicionFacturaAnulada=' . $this->invoiceDate->format('d-m-Y'),
-            'Huella=' . $this->previousHash,
-            is_null($timestamp) ? 'FechaHoraHusoGenRegistro=' . Carbon::now()->toAtomString() : 'FechaHoraHusoGenRegistro=' . $timestamp,
+            'IDEmisorFacturaAnulada='.$this->issuer->id,
+            'NumSerieFacturaAnulada='.$this->invoiceNumber,
+            'FechaExpedicionFacturaAnulada='.$this->invoiceDate->format('d-m-Y'),
+            'Huella='.$this->invoiceHash,
+            is_null($timestamp) ? 'FechaHoraHusoGenRegistro='.$this->getTimestamp() : 'FechaHoraHusoGenRegistro='.$timestamp,
         ];
 
         return Str::upper(hash('sha256', implode('&', $parts)));

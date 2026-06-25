@@ -18,14 +18,6 @@ class QRCode
 {
     /**
      * Render QR code as SVG string
-     *
-     * @param string $issuerNIF
-     * @param Carbon $invoiceDate
-     * @param string $number
-     * @param float $totalAmount
-     * @param bool $isProduction
-     *
-     * @return mixed
      */
     public static function SVG(
         string $issuerNIF,
@@ -33,23 +25,17 @@ class QRCode
         string $number,
         float $totalAmount,
         bool $isProduction = false
-    ): mixed
-    {
+    ): mixed {
         $url = self::buildUrl($issuerNIF, $invoiceDate, $number, $totalAmount, $isProduction);
         $render = self::buildQRRender(QRMarkupSVG::class);
+
         return $render->render($url);
     }
 
     /**
      * Render QR code as PNG base64 image
      *
-     * @param string $issuerNIF
-     * @param Carbon $invoiceDate
-     * @param string $number
-     * @param float $totalAmount
-     * @param bool $isProduction
      *
-     * @return mixed
      *
      * @throws QRGeneratorException
      */
@@ -59,8 +45,7 @@ class QRCode
         string $number,
         float $totalAmount,
         bool $isProduction = false
-    ): mixed
-    {
+    ): mixed {
         if (extension_loaded('gd') && function_exists('gd_info')) {
             $outputInterface = QRGdImagePNG::class;
         } elseif (extension_loaded('imagick')) {
@@ -71,25 +56,17 @@ class QRCode
 
         $url = self::buildUrl($issuerNIF, $invoiceDate, $number, $totalAmount, $isProduction);
         $render = self::buildQRRender($outputInterface, true);
+
         return $render->render($url);
     }
 
-    /**
-     * @param string $issuerNIF
-     * @param Carbon $invoiceDate
-     * @param string $number
-     * @param float $totalAmount
-     * @param bool $isProduction
-     * @return string
-     */
     public static function buildUrl(
         string $issuerNIF,
         Carbon $invoiceDate,
         string $number,
         float $totalAmount,
         bool $isProduction = false
-    ): string
-    {
+    ): string {
         $url = $isProduction ? AEAT::QR_VERIFICATION_PRODUCTION : AEAT::QR_VERIFICATION_SANDBOX;
         $query = http_build_query([
             'nif' => $issuerNIF,
@@ -98,23 +75,19 @@ class QRCode
             'importe' => number_format($totalAmount, 2, '.', ''),
         ]);
 
-        return $url . $query;
+        return $url.$query;
     }
 
     /**
      * Generate QR code from URI
      *
-     * @param string $uri
-     * @param QRCodeFormat $format
-     * @return string
      *
      * @throws QRGeneratorException
      */
     public static function fromURI(
         string $uri,
         QRCodeFormat $format
-    ): string
-    {
+    ): string {
         if ($format === QRCodeFormat::SVG) {
             $render = self::buildQRRender(QRMarkupSVG::class);
         } elseif ($format === QRCodeFormat::PNG) {
@@ -134,15 +107,9 @@ class QRCode
         return $render->render($uri);
     }
 
-    /**
-     * @param string $outputInterface
-     * @param bool $outputBase64
-     *
-     * @return QRCodeRender
-     */
     private static function buildQRRender(string $outputInterface, bool $outputBase64 = false): QRCodeRender
     {
-        $options = new QROptions();
+        $options = new QROptions;
         $options->version = 7;
         $options->outputInterface = $outputInterface;
 

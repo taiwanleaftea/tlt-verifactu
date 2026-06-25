@@ -27,21 +27,23 @@ use Taiwanleaftea\TltVerifactu\Exceptions\QRGeneratorException;
 use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
 use Taiwanleaftea\TltVerifactu\Exceptions\SoapClientException;
 use Taiwanleaftea\TltVerifactu\Services\CancelInvoice;
-use Taiwanleaftea\TltVerifactu\Support\Facades\VatValidator;
 use Taiwanleaftea\TltVerifactu\Services\QRCode;
 use Taiwanleaftea\TltVerifactu\Services\Soap;
 use Taiwanleaftea\TltVerifactu\Services\SubmitInvoice;
+use Taiwanleaftea\TltVerifactu\Support\Facades\VatValidator;
 use Taiwanleaftea\TltVerifactu\Traits\CheckArray;
 
 class Verifactu
 {
     use CheckArray;
+
     private VerifactuSettings $settings;
+
     private Certificate $certificate;
 
     public function __construct()
     {
-        $this->settings = new VerifactuSettings();
+        $this->settings = new VerifactuSettings;
     }
 
     public function config(Certificate $certificate): void
@@ -52,14 +54,6 @@ class Verifactu
     /**
      * Invoice submission service
      *
-     * @param LegalPerson $issuer
-     * @param array $invoiceData
-     * @param array $options
-     * @param OperationQualificationType $operationQualificationType
-     * @param array|null $previous
-     * @param Recipient|null $recipient
-     * @param Carbon|null $timestamp
-     * @return ResponseAeat
      * @throws CertificateException
      */
     public function submitInvoice(
@@ -70,19 +64,18 @@ class Verifactu
         ?array $previous = null,
         ?Recipient $recipient = null,
         ?Carbon $timestamp = null,
-    ): ResponseAeat
-    {
+    ): ResponseAeat {
         if (is_null($timestamp)) {
             $timestamp = Carbon::now();
         }
 
         $keys = ['number', 'date', 'description', 'type', 'amount', 'base', 'vat', 'rate'];
         if (($key = $this->checkArray($keys, $invoiceData)) !== true) {
-            return $this->responseWithErrors('Invoice key ' . $key . ' is missing.');
+            return $this->responseWithErrors('Invoice key '.$key.' is missing.');
         }
 
         $invoice = new InvoiceSubmission(
-            issuer:$issuer,
+            issuer: $issuer,
             invoiceNumber: $invoiceData['number'],
             invoiceDate: $invoiceData['date'],
             description: $invoiceData['description'],
@@ -94,14 +87,14 @@ class Verifactu
             timestamp: $timestamp,
         );
 
-        if (!$invoice->isSimplified()) {
+        if (! $invoice->isSimplified()) {
             if (is_null($recipient)) {
                 return $this->responseWithErrors('Recipient object is missing.');
             } else {
                 $invoice->setRecipient($recipient);
             }
 
-            if ($operationQualificationType == OperationQualificationType::SUBJECT_REVERSE && !VatValidator::isEU($recipient->countryCode)) {
+            if ($operationQualificationType == OperationQualificationType::SUBJECT_REVERSE && ! VatValidator::isEU($recipient->countryCode)) {
                 return $this->responseWithErrors('Recipient must be from EU to apply reverse charge.');
             } else {
                 $invoice->setOperationQualification($operationQualificationType);
@@ -112,7 +105,7 @@ class Verifactu
 
         if ($previous !== null) {
             $keys = ['number', 'date', 'hash'];
-            if (!$this->checkArray($keys, $previous)) {
+            if (! $this->checkArray($keys, $previous)) {
                 return $this->responseWithErrors('Previous invoice key is missing.');
             } else {
                 $invoice->setPreviousInvoice(
@@ -123,11 +116,11 @@ class Verifactu
             }
         }
 
-        if (!empty($options)) {
+        if (! empty($options)) {
             try {
                 $invoice->setOptions($options);
             } catch (InvoiceValidationException $e) {
-                return $this->responseWithErrors('Invoice cannot be validated (getXml): ' . $e->getMessage());
+                return $this->responseWithErrors('Invoice cannot be validated (getXml): '.$e->getMessage());
             }
         }
 
@@ -140,23 +133,23 @@ class Verifactu
         try {
             $submission->getXml($invoice);
         } catch (DOMException $e) {
-            return $this->responseWithErrors('XML cannot be created (getXml): ' . $e->getMessage());
+            return $this->responseWithErrors('XML cannot be created (getXml): '.$e->getMessage());
         } catch (InvoiceValidationException $e) {
-            return $this->responseWithErrors('Invoice cannot be validated (getXml): ' . $e->getMessage());
+            return $this->responseWithErrors('Invoice cannot be validated (getXml): '.$e->getMessage());
         } catch (RecipientException $e) {
-            return $this->responseWithErrors('Recipient cannot be validated (getXml): ' . $e->getMessage());
+            return $this->responseWithErrors('Recipient cannot be validated (getXml): '.$e->getMessage());
         }
 
         try {
             $submission->signXml($this->certificate);
         } catch (CertificateException|\Exception $e) {
-            return $this->responseWithErrors('XML cannot be signed: ' . $e->getMessage());
+            return $this->responseWithErrors('XML cannot be signed: '.$e->getMessage());
         }
 
         try {
             $envelopedDom = $submission->createEnvelopedXml($issuer);
         } catch (DOMException $e) {
-            return $this->responseWithErrors('XML cannot be enveloped: ' . $e->getMessage());
+            return $this->responseWithErrors('XML cannot be enveloped: '.$e->getMessage());
         }
 
         $finalXml = $submission->sanitizeXml($envelopedDom);
@@ -173,7 +166,7 @@ class Verifactu
         try {
             $soapClient = Soap::createClient(AEAT::WSDL_SANDBOX, $soapOptions);
         } catch (SoapClientException $e) {
-            return $this->responseWithErrors('SOAP client error: ' . $e->getMessage());
+            return $this->responseWithErrors('SOAP client error: '.$e->getMessage());
         }
 
         $soapVar = new SoapVar($finalXml, XSD_ANYXML);
@@ -182,24 +175,24 @@ class Verifactu
             $soapResponse = $soapClient->__soapCall('RegFactuSistemaFacturacion', [$soapVar]);
         } catch (SoapFault $e) {
             $errors = [];
-            $errors[] = 'SOAP call failed: ' . $e->getMessage();
-            $errors[] = 'XML sent: ' . PHP_EOL . $finalXml;
-            $errors[] = 'Last SOAP call: ' . $soapClient->__getLastRequest();
-            $errors[] = 'Last SOAP response: ' . $soapClient->__getLastResponse();
-            $errors[] = 'Last request header: ' . $soapClient->__getLastRequestHeaders();
+            $errors[] = 'SOAP call failed: '.$e->getMessage();
+            $errors[] = 'XML sent: '.PHP_EOL.$finalXml;
+            $errors[] = 'Last SOAP call: '.$soapClient->__getLastRequest();
+            $errors[] = 'Last SOAP response: '.$soapClient->__getLastResponse();
+            $errors[] = 'Last request header: '.$soapClient->__getLastRequestHeaders();
 
             return $this->responseWithErrors($errors, ['request' => $finalXml]);
         }
 
-        $response = new ResponseAeat();
+        $response = new ResponseAeat;
         $response->hash = $invoice->hash();
         $response->csv = $soapResponse->CSV ?? null;
         $response->json = json_encode($soapResponse, JSON_FORCE_OBJECT | JSON_PRETTY_PRINT);
         $response->timestamp = $timestamp;
 
-        if (!isset($soapResponse->EstadoEnvio)) {
+        if (! isset($soapResponse->EstadoEnvio)) {
             $response->errors[] = 'EstadoEnvio has not been received.';
-            $response->errors[] = 'Last SOAP response: ' . $soapClient->__getLastResponse();
+            $response->errors[] = 'Last SOAP response: '.$soapClient->__getLastResponse();
         } elseif ($soapResponse->EstadoEnvio == EstadoEnvio::ACCEPTED->value) {
             $response->success = true;
             if (isset($soapResponse->RespuestaLinea->EstadoRegistro)) {
@@ -236,7 +229,7 @@ class Verifactu
             }
 
             if (isset($soapResponse->RespuestaLinea->EstadoRegistro, $soapResponse->RespuestaLinea->DescripcionErrorRegistro)) {
-                $response->errors[] = 'Error ' . $soapResponse->RespuestaLinea->CodigoErrorRegistro . ': ' . $soapResponse->RespuestaLinea->DescripcionErrorRegistro;
+                $response->errors[] = 'Error '.$soapResponse->RespuestaLinea->CodigoErrorRegistro.': '.$soapResponse->RespuestaLinea->DescripcionErrorRegistro;
                 $response->aeatErrorCode = $soapResponse->RespuestaLinea->CodigoErrorRegistro;
             }
 
@@ -257,14 +250,6 @@ class Verifactu
     }
 
     /**
-     * @param LegalPerson $issuer
-     * @param array $invoiceData
-     * @param array $previous
-     * @param Generator|null $generator
-     * @param Carbon|null $timestamp
-     *
-     * @return ResponseAeat
-     *
      * @throws CertificateException
      */
     public function cancelInvoice(
@@ -273,15 +258,14 @@ class Verifactu
         array $previous,
         ?Generator $generator = null,
         ?Carbon $timestamp = null,
-    ): ResponseAeat
-    {
+    ): ResponseAeat {
         if (is_null($timestamp)) {
             $timestamp = Carbon::now();
         }
 
         $keys = ['number', 'date'];
         if (($key = $this->checkArray($keys, $invoiceData)) !== true) {
-            return $this->responseWithErrors('Invoice cancellation key ' . $key . ' is missing.');
+            return $this->responseWithErrors('Invoice cancellation key '.$key.' is missing.');
         }
 
         $invoice = new InvoiceCancellation(
@@ -293,7 +277,7 @@ class Verifactu
 
         if ($previous !== null) {
             $keys = ['number', 'date', 'hash'];
-            if (!$this->checkArray($keys, $previous)) {
+            if (! $this->checkArray($keys, $previous)) {
                 return $this->responseWithErrors('Previous invoice key is missing.');
             } else {
                 $invoice->setPreviousInvoice(
@@ -313,23 +297,23 @@ class Verifactu
         try {
             $cancellation->getXml($invoice);
         } catch (DOMException $e) {
-            return $this->responseWithErrors('XML cannot be created (getXml): ' . $e->getMessage());
+            return $this->responseWithErrors('XML cannot be created (getXml): '.$e->getMessage());
         } catch (InvoiceValidationException $e) {
-            return $this->responseWithErrors('Invoice cancellation cannot be validated (getXml): ' . $e->getMessage());
+            return $this->responseWithErrors('Invoice cancellation cannot be validated (getXml): '.$e->getMessage());
         } catch (GeneratorException $e) {
-            return $this->responseWithErrors('Invoice cancellation generator cannot be set (getXml): ' . $e->getMessage());
+            return $this->responseWithErrors('Invoice cancellation generator cannot be set (getXml): '.$e->getMessage());
         }
 
         try {
             $cancellation->signXml($this->certificate);
         } catch (CertificateException|\Exception $e) {
-            return $this->responseWithErrors('XML cannot be signed: ' . $e->getMessage());
+            return $this->responseWithErrors('XML cannot be signed: '.$e->getMessage());
         }
 
         try {
             $envelopedDom = $cancellation->createEnvelopedXml($issuer);
         } catch (DOMException $e) {
-            return $this->responseWithErrors('XML cannot be enveloped: ' . $e->getMessage());
+            return $this->responseWithErrors('XML cannot be enveloped: '.$e->getMessage());
         }
 
         $finalXml = $cancellation->sanitizeXml($envelopedDom);
@@ -346,7 +330,7 @@ class Verifactu
         try {
             $soapClient = Soap::createClient(AEAT::WSDL_SANDBOX, $soapOptions);
         } catch (SoapClientException $e) {
-            return $this->responseWithErrors('SOAP client error: ' . $e->getMessage());
+            return $this->responseWithErrors('SOAP client error: '.$e->getMessage());
         }
 
         $soapVar = new SoapVar($finalXml, XSD_ANYXML);
@@ -355,24 +339,24 @@ class Verifactu
             $soapResponse = $soapClient->__soapCall('RegFactuSistemaFacturacion', [$soapVar]);
         } catch (SoapFault $e) {
             $errors = [];
-            $errors[] = 'SOAP call failed: ' . $e->getMessage();
-            $errors[] = 'XML sent: ' . PHP_EOL . $finalXml;
-            $errors[] = 'Last SOAP call: ' . $soapClient->__getLastRequest();
-            $errors[] = 'Last SOAP response: ' . $soapClient->__getLastResponse();
-            $errors[] = 'Last request header: ' . $soapClient->__getLastRequestHeaders();
+            $errors[] = 'SOAP call failed: '.$e->getMessage();
+            $errors[] = 'XML sent: '.PHP_EOL.$finalXml;
+            $errors[] = 'Last SOAP call: '.$soapClient->__getLastRequest();
+            $errors[] = 'Last SOAP response: '.$soapClient->__getLastResponse();
+            $errors[] = 'Last request header: '.$soapClient->__getLastRequestHeaders();
 
             return $this->responseWithErrors($errors, ['request' => $finalXml]);
         }
 
-        $response = new ResponseAeat();
+        $response = new ResponseAeat;
         $response->hash = $invoice->hash();
         $response->csv = $soapResponse->CSV ?? null;
         $response->json = json_encode($soapResponse, JSON_FORCE_OBJECT | JSON_PRETTY_PRINT);
         $response->timestamp = $timestamp;
 
-        if (!isset($soapResponse->EstadoEnvio)) {
+        if (! isset($soapResponse->EstadoEnvio)) {
             $response->errors[] = 'EstadoEnvio has not been received.';
-            $response->errors[] = 'Last SOAP response: ' . $soapClient->__getLastResponse();
+            $response->errors[] = 'Last SOAP response: '.$soapClient->__getLastResponse();
         } elseif ($soapResponse->EstadoEnvio == EstadoEnvio::ACCEPTED->value) {
             $response->success = true;
             if (isset($soapResponse->RespuestaLinea->EstadoRegistro)) {
@@ -391,7 +375,7 @@ class Verifactu
             }
 
             if (isset($soapResponse->RespuestaLinea->EstadoRegistro, $soapResponse->RespuestaLinea->DescripcionErrorRegistro)) {
-                $response->errors[] = 'Error ' . $soapResponse->RespuestaLinea->CodigoErrorRegistro . ': ' . $soapResponse->RespuestaLinea->DescripcionErrorRegistro;
+                $response->errors[] = 'Error '.$soapResponse->RespuestaLinea->CodigoErrorRegistro.': '.$soapResponse->RespuestaLinea->DescripcionErrorRegistro;
                 $response->aeatErrorCode = $soapResponse->RespuestaLinea->CodigoErrorRegistro;
             }
 
@@ -411,32 +395,16 @@ class Verifactu
         return $response;
     }
 
-    /**
-     * @param string $issuerNIF
-     * @param Carbon $invoiceDate
-     * @param string $number
-     * @param float $totalAmount
-     *
-     * @return string
-     */
     public function generateQrSVG(
         string $issuerNIF,
         Carbon $invoiceDate,
         string $number,
         float $totalAmount,
-    ): string
-    {
+    ): string {
         return QRCode::SVG($issuerNIF, $invoiceDate, $number, $totalAmount, $this->settings->isProduction());
     }
 
     /**
-     * @param string $issuerNIF
-     * @param Carbon $invoiceDate
-     * @param string $number
-     * @param float $totalAmount
-     *
-     * @return string
-     *
      * @throws QRGeneratorException
      */
     public function generateQrPNG(
@@ -444,39 +412,25 @@ class Verifactu
         Carbon $invoiceDate,
         string $number,
         float $totalAmount,
-    ): string
-    {
+    ): string {
         return QRCode::PNG($issuerNIF, $invoiceDate, $number, $totalAmount, $this->settings->isProduction());
     }
 
-    /**
-     * @param string $issuerNIF
-     * @param Carbon $invoiceDate
-     * @param string $number
-     * @param float $totalAmount
-     *
-     * @return string
-     */
     public function generateQrURI(
         string $issuerNIF,
         Carbon $invoiceDate,
         string $number,
         float $totalAmount,
-    ): string
-    {
+    ): string {
         return QRCode::buildUrl($issuerNIF, $invoiceDate, $number, $totalAmount);
     }
 
     /**
      * Return response with errors
-     *
-     * @param string|array $messages
-     * @param array $additionals
-     * @return ResponseAeat
      */
     private function responseWithErrors(string|array $messages, array $additionals = []): ResponseAeat
     {
-        $response = new ResponseAeat();
+        $response = new ResponseAeat;
         $response->success = false;
         $response->errors = is_array($messages) ? $messages : [$messages];
 

@@ -4,37 +4,35 @@ declare(strict_types=1);
 
 namespace Taiwanleaftea\TltVerifactu\Support;
 
-use SoapFault;
 use Illuminate\Support\Str;
+use SoapClient;
+use SoapFault;
 use Taiwanleaftea\TltVerifactu\Classes\ResponseVies;
-use Taiwanleaftea\TltVerifactu\Services\Soap;
 use Taiwanleaftea\TltVerifactu\Constants\VIES;
 use Taiwanleaftea\TltVerifactu\Exceptions\SoapClientException;
+use Taiwanleaftea\TltVerifactu\Services\Soap;
 use Taiwanleaftea\TltVerifactu\Services\Vat;
 
 class VatValidator
 {
     /**
      * Validate VAT number via VIES service
-     *
-     * @param string $country
-     * @param string $vatNumber
-     * @return ResponseVies
      */
     public function online(string $country, string $vatNumber): ResponseVies
     {
         $errors = [];
 
-        $response = new ResponseVies();
+        $response = new ResponseVies;
 
-        if (!Vat::validateFormat($country, $vatNumber)) {
+        if (! Vat::validateFormat($country, $vatNumber)) {
             $response->success = false;
             $response->errors = ['VAT number is invalid'];
+
             return $response;
         }
 
         try {
-            $client = Soap::createClient(VIES::EU_VAT_API_URL . VIES::EU_VAT_WSDL_ENDPOINT);
+            $client = $this->createSoapClient(VIES::EU_VAT_API_URL.VIES::EU_VAT_WSDL_ENDPOINT);
         } catch (SoapClientException $e) {
             $errors[] = $e->getMessage();
         }
@@ -42,7 +40,7 @@ class VatValidator
         if (isset($client)) {
             $query = [
                 'countryCode' => Str::upper($country),
-                'vatNumber' => $this->sanitize($country, $vatNumber)
+                'vatNumber' => $this->sanitize($country, $vatNumber),
             ];
 
             try {
@@ -62,7 +60,7 @@ class VatValidator
             $response->address = $soapResponse->address;
         } else {
             $response->success = false;
-            $response->errors = $errors ?? [];
+            $response->errors = $errors;
         }
 
         return $response;
@@ -70,10 +68,6 @@ class VatValidator
 
     /**
      * Validate VAT number by format
-     *
-     * @param string $country
-     * @param string|null $vatNumber
-     * @return bool
      */
     public function formatValid(string $country, ?string $vatNumber): bool
     {
@@ -82,11 +76,6 @@ class VatValidator
 
     /**
      * Sanitize VAT string
-     *
-     * @param string $country
-     * @param string|null $vatNumber
-     * @param bool $removeCountry
-     * @return string|null
      */
     public function sanitize(string $country, ?string $vatNumber, bool $removeCountry = false): ?string
     {
@@ -103,12 +92,17 @@ class VatValidator
 
     /**
      * Check if country is EU member
-     *
-     * @param string $countryCode
-     * @return bool
      */
     public function isEU(string $countryCode): bool
     {
         return in_array($countryCode, VIES::MEMBERS);
+    }
+
+    /**
+     * @throws SoapClientException
+     */
+    protected function createSoapClient(string $wsdl): SoapClient
+    {
+        return Soap::createClient($wsdl);
     }
 }

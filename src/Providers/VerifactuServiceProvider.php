@@ -2,8 +2,8 @@
 
 namespace Taiwanleaftea\TltVerifactu\Providers;
 
-use Taiwanleaftea\TltVerifactu\Support\Facades\Verifactu;
 use Illuminate\Support\ServiceProvider;
+use Taiwanleaftea\TltVerifactu\Support\Verifactu;
 
 class VerifactuServiceProvider extends ServiceProvider
 {
@@ -12,8 +12,8 @@ class VerifactuServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(Verifactu::class, function () {
-            return new Verifactu();
+        $this->app->singleton(Verifactu::class, function (): Verifactu {
+            return new Verifactu;
         });
     }
 

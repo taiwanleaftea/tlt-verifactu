@@ -1,18 +1,15 @@
 <?php
 
-namespace Taiwanleaftea\TltVerifactu\Test;
+namespace Taiwanleaftea\TltVerifactu\Test\Verifactu;
 
 use DOMDocument;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Http;
 use Orchestra\Testbench\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Taiwanleaftea\TltVerifactu\Classes\InvoiceSubmission;
 use Taiwanleaftea\TltVerifactu\Classes\LegalPerson;
 use Taiwanleaftea\TltVerifactu\Classes\Recipient;
 use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
-use Taiwanleaftea\TltVerifactu\Constants\AEAT;
 use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
@@ -22,12 +19,14 @@ use Taiwanleaftea\TltVerifactu\Services\SubmitInvoice;
 class InvoiceSubmissionTest extends TestCase
 {
     private $xsd;
+
     private string $recipientName = 'Buyer Inc.';
+
     private string $recipientId = '12345678L';
 
-    public function testStandardESRecipientESProvider()
+    public function test_standard_es_recipient_es_provider()
     {
-        $settings = new VerifactuSettings();
+        $settings = new VerifactuSettings;
 
         $issuer = new LegalPerson(
             'Issuer Name',
@@ -57,14 +56,14 @@ class InvoiceSubmissionTest extends TestCase
         $invoice->setRecipient($recipient);
         $invoice->setOperationQualification(OperationQualificationType::SUBJECT_DIRECT);
 
-        $dom = SubmitInvoice::getXml($invoice, $settings);
+        $dom = (new SubmitInvoice($settings))->getXml($invoice);
         $validation = $this->validateXml($dom);
-        $this->assertTrue($validation['result'], 'XML StandardESRecipientESProvider validation failed.' . PHP_EOL . $validation['errors']);
+        $this->assertTrue($validation['result'], 'XML StandardESRecipientESProvider validation failed.'.PHP_EOL.$validation['errors']);
     }
 
-    public function testSimplifiedESProvider()
+    public function test_simplified_es_provider()
     {
-        $settings = new VerifactuSettings();
+        $settings = new VerifactuSettings;
 
         $issuer = new LegalPerson(
             'Issuer Name',
@@ -86,14 +85,14 @@ class InvoiceSubmissionTest extends TestCase
 
         $invoice->setOperationQualification(OperationQualificationType::SUBJECT_DIRECT);
 
-        $dom = SubmitInvoice::getXml($invoice, $settings);
+        $dom = (new SubmitInvoice($settings))->getXml($invoice);
         $validation = $this->validateXml($dom);
-        $this->assertTrue($validation['result'], 'XML testSimplifiedESProvider validation failed.' . PHP_EOL . $validation['errors']);
+        $this->assertTrue($validation['result'], 'XML testSimplifiedESProvider validation failed.'.PHP_EOL.$validation['errors']);
     }
 
-    public function testStandardNONESRecipientNONESProvider()
+    public function test_standard_nones_recipient_nones_provider()
     {
-        $settings = new VerifactuSettings();
+        $settings = new VerifactuSettings;
 
         $issuer = new LegalPerson(
             'Issuer Name',
@@ -117,48 +116,50 @@ class InvoiceSubmissionTest extends TestCase
             $this->recipientName,
             $this->recipientId,
             'AT',
-            IdType::NATIONAL_ID
+            IdType::NIF
         );
 
         $invoice->setRecipient($recipient);
         $invoice->setOperationQualification(OperationQualificationType::SUBJECT_DIRECT);
 
-        $dom = SubmitInvoice::getXml($invoice, $settings);
+        $dom = (new SubmitInvoice($settings))->getXml($invoice);
         $validation = $this->validateXml($dom);
-        $this->assertTrue($validation['result'], 'XML testStandardNONESRecipientNONESProvider validation failed.' . PHP_EOL . $validation['errors']);
+        $this->assertTrue($validation['result'], 'XML testStandardNONESRecipientNONESProvider validation failed.'.PHP_EOL.$validation['errors']);
     }
 
     private function validateXml(DOMDocument $dom): array
     {
         libxml_use_internal_errors(true);
         $errors = '';
-        $validation = $dom->schemaValidateSource($this->getXSD(AEAT::SF_NAMESPACE));
+        $xsd = $this->getXSDPath();
+
+        if (empty($xsd)) {
+            $this->markTestSkipped('AEAT XSD is not available.');
+        }
+
+        $validation = $dom->schemaValidate($xsd);
         if ($validation === false) {
             foreach (libxml_get_errors() as $error) {
-                $errors .= $error->message . PHP_EOL;
+                $errors .= $error->message.PHP_EOL;
             }
         }
 
         return [
             'result' => $validation,
-            'errors' => $errors
+            'errors' => $errors,
         ];
     }
 
-    private function getXSD(string $url): false|string
+    private function getXSDPath(): false|string
     {
-        if (!isset($this->xsd)) {
-            try {
-                $response = Http::get($url);
-            } catch (ConnectionException $e) {
+        if (! isset($this->xsd)) {
+            $path = __DIR__.'/Fixtures/xsd/SuministroInformacion.xsd';
+
+            if (! is_file($path)) {
                 return false;
             }
 
-            if ($response->failed()) {
-                return false;
-            } else {
-                $this->xsd = $response->body();
-            }
+            $this->xsd = $path;
         }
 
         return $this->xsd;

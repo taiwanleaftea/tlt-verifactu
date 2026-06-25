@@ -9,7 +9,6 @@ use Illuminate\Support\Str;
 class Vat
 {
     /**
-     * @var array
      * @link https://ec.europa.eu/taxation_customs/vies/faq.html?locale=lt#item_11
      */
     private static array $patterns = [
@@ -47,10 +46,6 @@ class Vat
 
     /**
      * Validate a VAT number format
-     *
-     * @param string $country
-     * @param string|null $vatNumber
-     * @return boolean
      */
     public static function validateFormat(string $country, ?string $vatNumber): bool
     {
@@ -61,11 +56,10 @@ class Vat
         $vatNumber = Str::upper($vatNumber);
         $country = Str::upper($country);
 
-        if (!isset(self::$patterns[$country])) {
+        if (! isset(self::$patterns[$country])) {
             return false;
         }
 
-        return preg_match('/^' . self::$patterns[$country] . '$/', $vatNumber) > 0;
+        return preg_match('/^'.self::$patterns[$country].'$/', $vatNumber) > 0;
     }
-
 }

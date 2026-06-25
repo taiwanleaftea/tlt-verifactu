@@ -17,15 +17,25 @@ use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
 class InvoiceSubmission extends Invoice
 {
     public InvoiceType $type;
+
     public string $description;
+
     public float $taxRate;
+
     protected float $taxableBase;
+
     protected float $taxAmount;
+
     public float $totalAmount;
+
     protected Recipient $recipient;
+
     protected TaxType $taxType;
+
     protected TaxRegimeIVA $taxRegimeIVA;
+
     protected OperationQualificationType $operationQualification;
+
     public ExemptOperationType $exemptOperation;
 
     public function __construct(
@@ -39,8 +49,7 @@ class InvoiceSubmission extends Invoice
         float $taxAmount,
         float $totalAmount,
         Carbon $timestamp
-    )
-    {
+    ) {
         $this->issuer = $issuer;
         $this->invoiceNumber = Str::trim($invoiceNumber);
         $this->invoiceDate = $invoiceDate;
@@ -57,8 +66,6 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Get total amount in normalized format
-     *
-     * @return string
      */
     public function getTotalAmount(): string
     {
@@ -67,8 +74,6 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Get tax amount in normalized format
-     *
-     * @return string
      */
     public function getTaxAmount(): string
     {
@@ -77,8 +82,6 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Get tax rate in normalized format
-     *
-     * @return string
      */
     public function getTaxRate(): string
     {
@@ -87,8 +90,6 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Get taxable base in normalized format
-     *
-     * @return string
      */
     public function getTaxableBase(): string
     {
@@ -97,9 +98,6 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Set recipient data for invoice
-     *
-     * @param Recipient $recipient
-     * @return void
      */
     public function setRecipient(Recipient $recipient): void
     {
@@ -108,12 +106,12 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Get recipient for invoice
-     * @return Recipient
+     *
      * @throws RecipientException
      */
     public function getRecipient(): Recipient
     {
-        if (!isset($this->recipient)) {
+        if (! isset($this->recipient)) {
             throw new RecipientException('Recipient not found.');
         }
 
@@ -122,9 +120,6 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Set tax type
-     *
-     * @param TaxType $taxType
-     * @return void
      */
     public function setTaxType(TaxType $taxType): void
     {
@@ -133,8 +128,6 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Get tax type value or type IVA by default
-     *
-     * @return string
      */
     public function getTaxType(): string
     {
@@ -143,9 +136,6 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Set tax regime IVA
-     *
-     * @param TaxRegimeIVA $taxRegime
-     * @return void
      */
     public function setTaxRegimeIVA(TaxRegimeIVA $taxRegime): void
     {
@@ -154,8 +144,6 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Get tax regime value or type General by default
-     *
-     * @return string
      */
     public function getTaxRegimeIVA(): string
     {
@@ -164,9 +152,6 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Set operation qualification
-     *
-     * @param OperationQualificationType $operationQualification
-     * @return void
      */
     public function setOperationQualification(OperationQualificationType $operationQualification): void
     {
@@ -176,7 +161,6 @@ class InvoiceSubmission extends Invoice
     /**
      * Get operation qualification
      *
-     * @return string
      * @throws InvoiceValidationException
      */
     public function getOperationQualification(): string
@@ -185,11 +169,11 @@ class InvoiceSubmission extends Invoice
             return OperationQualificationType::SUBJECT_DIRECT->value;
         }
 
-        if (!isset($this->operationQualification) && !isset($this->recipient)) {
+        if (! isset($this->operationQualification) && ! isset($this->recipient)) {
             throw new InvoiceValidationException('Recipient must be set.');
         }
 
-        if (!isset($this->operationQualification)) {
+        if (! isset($this->operationQualification)) {
             throw new InvoiceValidationException('Operation qualification must be set for normal invoice.');
         }
 
@@ -199,12 +183,11 @@ class InvoiceSubmission extends Invoice
     /**
      * Check if operation qualification type is VAT exempt
      *
-     * @return bool
      * @throws InvoiceValidationException
      */
     public function isVatExemptOperation(): bool
     {
-        if (!isset($this->operationQualification)) {
+        if (! isset($this->operationQualification)) {
             throw new InvoiceValidationException('Operation qualification must be set for normal invoice.');
         }
 
@@ -213,8 +196,6 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Check if operation qualification type is intracommunity (customer is EU company)
-     *
-     * @return bool
      */
     public function isIntracommunityOperation(): bool
     {
@@ -223,22 +204,19 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Hash generator for submission
-     *
-     * @param string|null $timestamp
-     * @return string
      */
-    public function hash(string $timestamp = null): string
+    public function hash(?string $timestamp = null): string
     {
-        if (!isset($this->hash)) {
+        if (! isset($this->hash)) {
             $parts = [
-                'IDEmisorFactura=' . $this->issuer->id,
-                'NumSerieFactura=' . $this->invoiceNumber,
-                'FechaExpedicionFactura=' . $this->invoiceDate->format('d-m-Y'),
-                'TipoFactura=' . $this->type->value,
-                'CuotaTotal=' . $this->normalizeDecimal($this->taxAmount),
-                'ImporteTotal=' . $this->normalizeDecimal($this->totalAmount),
-                'Huella=' . $this->previousHash,
-                is_null($timestamp) ? 'FechaHoraHusoGenRegistro=' . $timestamp : 'FechaHoraHusoGenRegistro=' . $this->getTimestamp(),
+                'IDEmisorFactura='.$this->issuer->id,
+                'NumSerieFactura='.$this->invoiceNumber,
+                'FechaExpedicionFactura='.$this->invoiceDate->format('d-m-Y'),
+                'TipoFactura='.$this->type->value,
+                'CuotaTotal='.$this->normalizeDecimal($this->taxAmount),
+                'ImporteTotal='.$this->normalizeDecimal($this->totalAmount),
+                'Huella='.$this->previousHash,
+                is_null($timestamp) ? 'FechaHoraHusoGenRegistro='.$this->getTimestamp() : 'FechaHoraHusoGenRegistro='.$timestamp,
             ];
 
             $this->hash = Str::upper(hash('sha256', implode('&', $parts)));
@@ -249,8 +227,6 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Check for Standard (F2) invoice type
-     *
-     * @return bool
      */
     public function isSimplified(): bool
     {
@@ -259,8 +235,6 @@ class InvoiceSubmission extends Invoice
 
     /**
      * Check for credit note (Factura rectificada)
-     *
-     * @return bool
      */
     public function isRectificado(): bool
     {

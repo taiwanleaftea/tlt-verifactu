@@ -1,26 +1,30 @@
 # TLT Verifactu
-A Laravel package for EU VAT validation and VERIFACTU support. This package can be used with any 
-invoicing system (SIF). You must submit the declaration of responsibility (declaración responsable) for 
+
+A Laravel package for EU VAT validation and VERIFACTU support. This package can be used with any
+invoicing system (SIF). You must submit the declaration of responsibility (declaración responsable) for
 your system yourself.
 
-**Please note: Canary, Ceuta and Melilla tax modes are not supported.**
+**Please note:** The tax regimes for the Canary Islands, Ceuta, and Melilla are not supported.
 
 ## Installation
 
 ### Prerequisites
-PHP 8.3 or above with the dom, json, libxml, openssl, and soap extensions installed and enabled. 
-Laravel 11 or 12 is required.
+
+PHP 8.3 or above with the dom, json, libxml, openssl, and soap extensions installed and enabled.
+Laravel 12 or above is required.
 
 ### Requirements for QR Code Generator
-- [`ext-gd`](https://www.php.net/manual/book.image) for `Gdlib` based output **or**
+
+- [`ext-gd`](https://www.php.net/manual/book.image) for `GDLib`-based output **or**
 - [`ext-imagick`](https://github.com/Imagick/imagick) with [ImageMagick](https://imagemagick.org) installed
-- [`ext-fileinfo`](https://www.php.net/manual/book.fileinfo.php) required by `Imagick` output
+- [`ext-fileinfo`](https://www.php.net/manual/book.fileinfo.php), required by `Imagick` output
 
 ### OpenSSL Configuration
-The Spanish FNMT certification authority uses outdated encryption algorithms that are not supported by 
+
+The Spanish FNMT certification authority uses outdated encryption algorithms that are not supported by
 OpenSSL 3.0 and above.
 
-For OpenSSL versions higher than 3.0, you must enable legacy encryption methods. To do this, open your 
+For OpenSSL 3.0 or later, you must enable legacy encryption methods. To do this, open your
 `openssl.conf` (e.g., `/etc/ssl/openssl.cnf` on Ubuntu/Debian) and add the following:
 
 ```
@@ -51,7 +55,11 @@ php artisan vendor:publish --tag=tlt-verifactu --ansi --force
 
 The package will be installed, and `config/tlt-verifactu.php` will be published.
 
-Open your `.env` file and add the variables `VERIFACTU_PRODUCTION` (set to true to use the production AEAT server) 
+Edit the published config file and replace the software provider and system values (`provider_name`, `provider_nif`,
+`provider_country`, `system_name`, etc.) with the values for your invoicing system. These values are intentionally
+plain Laravel config values because each application should commit the SIF/provider configuration it uses.
+
+Open your `.env` file and add `VERIFACTU_PRODUCTION` (set it to `true` to use the production AEAT server)
 and `VERIFACTU_DISK` (the disk where SSL certificates are stored).
 
 ## Usage
@@ -59,7 +67,7 @@ and `VERIFACTU_DISK` (the disk where SSL certificates are stored).
 ### VAT Number Validator
 
 ```php
-use Taiwanleaftea\TltVerifactu\Support\Facades\VatValidator
+use Taiwanleaftea\TltVerifactu\Support\Facades\VatValidator;
 
 // Offline validation by format
 echo VatValidator::formatValid('ES', 'B12345678');
@@ -67,13 +75,13 @@ echo VatValidator::formatValid('ES', 'B12345678');
 // Online validation via the VIES service
 $response = VatValidator::online('ES', 'B12345678');
 if ($response->success) {
-    // VAT number present in the VIES database
+    // VAT number is present in the VIES database
     echo $response->valid;
     // Data returned from the VIES database (varies per country)
     echo $response->vatNumber;
     echo $response->countryCode;
-    echo $response->requestDate
-    echo $response->name
+    echo $response->requestDate;
+    echo $response->name;
     echo $response->address;
 } else {
     foreach ($response->errors as $error) {
@@ -111,8 +119,8 @@ $previous = [
 $invoice = [
     'number' => '2025/2',
     'date' => Carbon::createFromFormat('Y-m-d', '2025-01-12'),
-    'description' => 'Invoice description'
-    'type' =>InvoiceType::STANDARD,
+    'description' => 'Invoice description',
+    'type' => InvoiceType::STANDARD,
     'amount' => 121,
     'base' => 100,
     'vat' => 21,
@@ -140,7 +148,7 @@ if ($result->success) {
     echo 'Success';
     echo $result->csv; // CSV code from AEAT
     echo $result->qrSVG; // QR code as SVG string
-    echo $result->qrURI; // Full qualified URI for further QR code generation 
+    echo $result->qrURI; // Fully qualified URI for further QR code generation
 } else {
     if ($result->status == EstadoRegistro::ACCEPTED_ERRORES) {
         // Invoice was registered with errors
@@ -150,7 +158,7 @@ if ($result->success) {
 
     echo 'Errors:' . PHP_EOL;
     foreach ($result->errors as $error) {
-        $echo $error;
+        echo $error;
     }
 }
 ```
@@ -209,12 +217,13 @@ if ($result->success) {
 ```
 
 ## QR Code Generation
+
 ```php
 use Illuminate\Support\Carbon;
 use Taiwanleaftea\TltVerifactu\Support\Facades\Verifactu;
 use Taiwanleaftea\TltVerifactu\Exceptions\QRGeneratorException;
 
-// base64 encoded PNG
+// Base64-encoded PNG
 try {
     $qrcode = Verifactu::generateQrPNG(
         issuerNIF: 'A12345678',

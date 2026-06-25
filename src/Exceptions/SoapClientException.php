@@ -4,6 +4,4 @@ namespace Taiwanleaftea\TltVerifactu\Exceptions;
 
 use Exception;
 
-class SoapClientException extends Exception
-{
-}
+class SoapClientException extends Exception {}

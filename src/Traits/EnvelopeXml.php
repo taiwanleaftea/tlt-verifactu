@@ -14,14 +14,11 @@ trait EnvelopeXml
     /**
      * Create Cabecera in accordance with VERIFACTU format for signed XML
      *
-     * @param DOMDocument $signedDom
-     * @param LegalPerson $issuer
-     * @return DOMDocument
      * @throws \DOMException
      */
     public function createEnvelopedXml(LegalPerson $issuer): DOMDocument
     {
-        if (!$this->generated) {
+        if (! $this->generated) {
             throw new XmlGenerationException('XML must be generated first.');
         }
 

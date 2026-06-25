@@ -13,12 +13,19 @@ use Taiwanleaftea\TltVerifactu\Constants\AEAT;
 class InformationSystem
 {
     public LegalPerson $provider;
+
     public string $name;
+
     public string $id;
+
     public string $version;
+
     public int $installationNumber;
+
     public bool $verifactuOnly;
+
     public bool $multipleTaxpayers;
+
     public bool $singleTaxpayerMode;
 
     public function __construct(
@@ -30,8 +37,7 @@ class InformationSystem
         bool $verifactuOnly,
         bool $multipleTaxpayers,
         bool $singleTaxpayerMode
-    )
-    {
+    ) {
         $this->provider = $provider;
         $this->name = Str::trim($name);
         $this->id = Str::trim($id);
@@ -44,8 +50,6 @@ class InformationSystem
 
     /**
      * TipoUsoPosibleSoloVerifactu
-     *
-     * @return string
      */
     public function getVerifactuOnly(): string
     {
@@ -54,8 +58,6 @@ class InformationSystem
 
     /**
      * TipoUsoPosibleMultiOT
-     *
-     * @return string
      */
     public function getMultipleTaxpayers(): string
     {
@@ -64,11 +66,9 @@ class InformationSystem
 
     /**
      * IndicadorMultiplesOT
-     *
-     * @return string
      */
     public function getSingleTaxpayerMode(): string
     {
-        return $this->singleTaxpayerMode ?  AEAT::NO : AEAT::YES;
+        return $this->singleTaxpayerMode ? AEAT::NO : AEAT::YES;
     }
 }

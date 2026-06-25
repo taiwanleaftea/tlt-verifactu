@@ -8,10 +8,6 @@ use Taiwanleaftea\TltVerifactu\Classes\InformationSystem;
 trait BuildInformationSystem
 {
     /**
-     * @param DOMDocument $dom
-     * @param $namespace
-     * @param InformationSystem $system
-     * @return \DOMElement|false
      * @throws \DOMException
      */
     private static function buildInformationSystem(DOMDocument $dom, $namespace, InformationSystem $system): false|\DOMElement

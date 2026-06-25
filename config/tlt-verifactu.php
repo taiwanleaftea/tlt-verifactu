@@ -1,10 +1,12 @@
 <?php
 
+use Taiwanleaftea\TltVerifactu\Enums\IdType;
+
 return [
-    'production' => env('VERIFACTU_PRODUCTION',false),
+    'production' => env('VERIFACTU_PRODUCTION', false),
 
     // Disk with certificates
-    'disk' => env('VERIFACTU_DISK','local'),
+    'disk' => env('VERIFACTU_DISK', 'local'),
 
     // Software information
     'system_name' => 'Invoicing Software',
@@ -15,7 +17,7 @@ return [
     'provider_name' => 'Software Provider Ltd',
     'provider_nif' => '12312367X',
     'provider_country' => 'ES',
-    'provider_certificate_type' => \Taiwanleaftea\TltVerifactu\Enums\IdType::NIF,
+    'provider_certificate_type' => IdType::NIF,
 
     // Return values
     'generate_svg' => false,

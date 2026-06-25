@@ -2,8 +2,8 @@
 
 namespace Taiwanleaftea\TltVerifactu\Providers;
 
-use Taiwanleaftea\TltVerifactu\Support\Facades\VatValidator;
 use Illuminate\Support\ServiceProvider;
+use Taiwanleaftea\TltVerifactu\Support\VatValidator;
 
 class VatValidatorServiceProvider extends ServiceProvider
 {
@@ -12,8 +12,8 @@ class VatValidatorServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(VatValidator::class, function () {
-            return new VatValidator();
+        $this->app->singleton(VatValidator::class, function (): VatValidator {
+            return new VatValidator;
         });
     }
 

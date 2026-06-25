@@ -21,18 +21,25 @@
         "ext-openssl": "*",
         "ext-soap": "*",
         "chillerlan/php-qrcode": "^6.0",
-        "illuminate/contracts": "^11.0||^12.0",
+        "illuminate/filesystem": "^12.0",
+        "illuminate/support": "^12.0",
         "robrichards/xmlseclibs": "^3.1"
     },
     "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.0",
         "orchestra/testbench": "^10.0",
         "phpunit/phpunit": "^11.0"
+    },
+    "suggest": {
+        "ext-fileinfo": "Required when rendering QR codes through Imagick.",
+        "ext-gd": "Required when rendering PNG QR codes through GD.",
+        "ext-imagick": "Can be used as an alternative renderer for PNG QR codes."
     },
     "autoload": {
         "psr-4": {
             "Taiwanleaftea\\TltVerifactu\\": "src/"
-        },
-        "files": []
+        }
     },
     "autoload-dev": {
         "psr-4": {
@@ -43,8 +50,7 @@
         "laravel": {
             "providers": [
                 "Taiwanleaftea\\TltVerifactu\\Providers\\TltVerifactuServiceProvider"
-            ],
-            "aliases": {}
+            ]
         }
     },
     "config": {
@@ -52,12 +58,22 @@
         "preferred-install": "dist",
         "sort-packages": true,
         "allow-plugins": {
-            "pestphp/pest-plugin": true
+            "pestphp/pest-plugin": true,
+            "phpstan/extension-installer": true
         }
     },
-    "minimum-stability": "dev",
+    "minimum-stability": "stable",
     "prefer-stable": true,
     "scripts": {
+        "analyse": [
+            "vendor/bin/phpstan analyse --debug --memory-limit=1G"
+        ],
+        "format": [
+            "vendor/bin/pint"
+        ],
+        "format:test": [
+            "vendor/bin/pint --test"
+        ],
         "test": [
             "vendor/bin/phpunit"
         ]

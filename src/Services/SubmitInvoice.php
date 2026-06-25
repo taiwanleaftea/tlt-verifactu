@@ -22,17 +22,12 @@ class SubmitInvoice
 {
     use BuildInformationSystem, EnvelopeXml, SanitizeXml, SignXml;
 
-    /**
-     * @var DOMDocument
-     */
     protected DOMDocument $document;
 
-    /**
-     * @var VerifactuSettings
-     */
     protected VerifactuSettings $settings;
 
     protected bool $generated = false;
+
     protected bool $signed = false;
 
     public function __construct(VerifactuSettings $settings)
@@ -44,8 +39,6 @@ class SubmitInvoice
     /**
      * Generate Invoice submission XML
      *
-     * @param InvoiceSubmission $invoice
-     * @return DOMDocument
      * @throws InvoiceValidationException
      * @throws RecipientException
      * @throws DOMException
@@ -71,7 +64,7 @@ class SubmitInvoice
         $idFactura->appendChild($dom->createElementNS($namespace, 'sf:FechaExpedicionFactura', $invoice->getDate()));
 
         // RefExterna, optional
-        if (!empty($invoice->externalReference)) {
+        if (! empty($invoice->externalReference)) {
             $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:RefExterna', $invoice->externalReference));
         }
 
@@ -143,7 +136,7 @@ class SubmitInvoice
         }
 
         // Desglose, required
-        $desglose  = $dom->createElementNS($namespace, 'sf:Desglose');
+        $desglose = $dom->createElementNS($namespace, 'sf:Desglose');
         $registroAlta->appendChild($desglose);
 
         // DetalleDesglose, required
@@ -156,7 +149,7 @@ class SubmitInvoice
         // ClaveRegimen, optional
         $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:ClaveRegimen', $invoice->getTaxRegimeIVA()));
 
-        if (!isset($invoice->exemptOperation)) {
+        if (! isset($invoice->exemptOperation)) {
             // CalificacionOperacion, required
             $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:CalificacionOperacion', $invoice->getOperationQualification()));
         } else {
@@ -164,7 +157,7 @@ class SubmitInvoice
             $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:OperacionExenta', $invoice->exemptOperation->value));
         }
 
-        if (!$invoice->isVatExemptOperation()) {
+        if (! $invoice->isVatExemptOperation()) {
             // TipoImpositivo, required for non VAT exempt operations
             $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:TipoImpositivo', $invoice->getTaxRate()));
         }
@@ -172,7 +165,7 @@ class SubmitInvoice
         // BaseImponibleOimporteNoSujeto
         $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:BaseImponibleOimporteNoSujeto', $invoice->getTaxableBase()));
 
-        if (!$invoice->isVatExemptOperation()) {
+        if (! $invoice->isVatExemptOperation()) {
             // CuotaRepercutida, required for non VAT exempt operations
             $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:CuotaRepercutida', $invoice->getTaxAmount()));
         }

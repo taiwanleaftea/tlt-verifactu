@@ -1,6 +1,6 @@
 <?php
 
-namespace Taiwanleaftea\TltVerifactu\Test;
+namespace Taiwanleaftea\TltVerifactu\Test\Verifactu;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -11,7 +11,7 @@ use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
 #[CoversClass(Recipient::class)]
 class RecipientTest extends TestCase
 {
-    public function testCreateEURecipientWithoutID()
+    public function test_create_eu_recipient_without_id()
     {
         $this->expectException(RecipientException::class);
         new Recipient(
@@ -22,7 +22,7 @@ class RecipientTest extends TestCase
         );
     }
 
-    public function testCreateESRecipient()
+    public function test_create_es_recipient()
     {
         $recipient = new Recipient(
             'Recipient Name',
@@ -34,7 +34,7 @@ class RecipientTest extends TestCase
         $this->assertTrue($recipient->isDomestic(), 'Domestic must be true for ES recipient.');
     }
 
-    public function testCreateEURecipient()
+    public function test_create_eu_recipient()
     {
         $recipient = new Recipient(
             'Recipient Name',

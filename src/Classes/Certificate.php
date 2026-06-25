@@ -11,8 +11,11 @@ use Taiwanleaftea\TltVerifactu\Exceptions\CertificateException;
 class Certificate
 {
     private string $disk;
+
     private string $certPath;
+
     private string $password;
+
     private array $certificate;
 
     public function __construct(string $certPath, string $password)
@@ -25,13 +28,12 @@ class Certificate
     /**
      * Get X.509 certificate contents.
      *
-     * @return array
      * @throws CertificateException
      */
     public function readP12Certificate(): array
     {
         if (Storage::disk($this->disk)->missing($this->certPath)) {
-            throw new CertificateException('Certificate not found: ' . $this->certPath);
+            throw new CertificateException('Certificate not found: '.$this->certPath);
         }
 
         $ext = Str::lower(pathinfo($this->certPath, PATHINFO_EXTENSION));
@@ -39,7 +41,7 @@ class Certificate
 
         if ($ext === 'p12') {
             if (openssl_pkcs12_read($certificate, $p12Certificate, $this->password) === false) {
-                throw new CertificateException('Failed to read p12 certificate: ' . openssl_error_string());
+                throw new CertificateException('Failed to read p12 certificate: '.openssl_error_string());
             } else {
                 $certInfo = openssl_x509_parse($p12Certificate['cert']);
                 $now = time();
@@ -61,12 +63,11 @@ class Certificate
     /**
      * Get certificate
      *
-     * @return string
      * @throws CertificateException
      */
     public function getCertificate(): string
     {
-        if (!isset($this->certificate)) {
+        if (! isset($this->certificate)) {
             $this->certificate = $this->readP12Certificate();
         }
 
@@ -76,12 +77,11 @@ class Certificate
     /**
      * Get private key
      *
-     * @return string
      * @throws CertificateException
      */
     public function getPrivateKey(): string
     {
-        if (!isset($this->certificate)) {
+        if (! isset($this->certificate)) {
             $this->certificate = $this->readP12Certificate();
         }
 
@@ -91,7 +91,6 @@ class Certificate
     /**
      * Generate PEM certificate for SOAP request
      *
-     * @return false|string
      * @throws CertificateException
      */
     public function generatePem(): false|string
@@ -100,12 +99,11 @@ class Certificate
             return false;
         }
 
-        //$pKey = $this->getPrivateKey();
-        $pemContent = $this->getCertificate() . $pKey;
+        // $pKey = $this->getPrivateKey();
+        $pemContent = $this->getCertificate().$pKey;
 
-
-        //$pemContent = Str::finish($this->getCertificate(), '\n') . Str::finish($this->getPrivateKey(), '\n');
-        $name = Str::lower(pathinfo($this->certPath, PATHINFO_FILENAME)) . '.pem';
+        // $pemContent = Str::finish($this->getCertificate(), '\n') . Str::finish($this->getPrivateKey(), '\n');
+        $name = Str::lower(pathinfo($this->certPath, PATHINFO_FILENAME)).'.pem';
 
         if (Storage::disk($this->disk)->put($name, $pemContent)) {
             return Storage::disk($this->disk)->path($name);
@@ -116,8 +114,6 @@ class Certificate
 
     /**
      * Get certificate password
-     *
-     * @return string
      */
     public function getPassword(): string
     {

@@ -1,6 +1,6 @@
 <?php
 
-namespace Taiwanleaftea\TltVerifactu\Test;
+namespace Taiwanleaftea\TltVerifactu\Test\Verifactu;
 
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -14,7 +14,7 @@ use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 #[CoversClass(InvoiceCancellation::class)]
 class HashGeneratorTest extends TestCase
 {
-    public function testSubmission()
+    public function test_submission()
     {
         $issuer = new LegalPerson(
             'Issuer Name',
@@ -51,14 +51,14 @@ class HashGeneratorTest extends TestCase
             Carbon::now()
         );
 
-        $invoice->previousHash ='3C464DAF61ACB827C65FDA19F352A4E3BDC2C640E9E9FC4CC058073F38F12F60';
+        $invoice->previousHash = '3C464DAF61ACB827C65FDA19F352A4E3BDC2C640E9E9FC4CC058073F38F12F60';
 
         $hash = $invoice->hash('2024-01-01T19:20:35+01:00');
 
         $this->assertEquals('F7B94CFD8924EDFF273501B01EE5153E4CE8F259766F88CF6ACB8935802A2B97', $hash, 'Submission hash must be equal with AEAT example 2.');
     }
 
-    public function testCancellation()
+    public function test_cancellation()
     {
         $issuer = new LegalPerson(
             'Issuer Name',

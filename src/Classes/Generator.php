@@ -11,13 +11,6 @@ class Generator extends LegalPerson
 {
     public GeneratorType $generatorType;
 
-    /**
-     * @param GeneratorType $generatorType
-     * @param string $name
-     * @param string $id
-     * @param string $countryCode
-     * @param IdType $idType
-     */
     public function __construct(GeneratorType $generatorType, string $name, string $id, string $countryCode, IdType $idType)
     {
         $this->generatorType = $generatorType;

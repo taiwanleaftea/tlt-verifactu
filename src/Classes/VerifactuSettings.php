@@ -10,8 +10,11 @@ use Taiwanleaftea\TltVerifactu\Enums\IdType;
 class VerifactuSettings
 {
     public const string VERSION = '1.0.1';
+
     public const string SYSTEM_ID = '01';
+
     private InformationSystem $informationSystem;
+
     private bool $production;
 
     public function __construct()
@@ -39,8 +42,6 @@ class VerifactuSettings
 
     /**
      * Get information system info
-     *
-     * @return InformationSystem
      */
     public function getInformationSystem(): InformationSystem
     {
@@ -49,8 +50,6 @@ class VerifactuSettings
 
     /**
      * Check if in production mode
-     *
-     * @return bool
      */
     public function isProduction(): bool
     {
@@ -59,8 +58,6 @@ class VerifactuSettings
 
     /**
      * Get VERIFACTU Service Url
-     *
-     * @return string
      */
     public function getVerifactuServiceUrl(): string
     {
@@ -69,8 +66,6 @@ class VerifactuSettings
 
     /**
      * Get QR Check Url
-     *
-     * @return string
      */
     public function getQrCheckUrl(): string
     {

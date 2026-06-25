@@ -4,6 +4,4 @@ namespace Taiwanleaftea\TltVerifactu\Exceptions;
 
 use Exception;
 
-class InvoiceValidationException extends Exception
-{
-}
+class InvoiceValidationException extends Exception {}

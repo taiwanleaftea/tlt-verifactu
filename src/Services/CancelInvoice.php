@@ -20,17 +20,12 @@ class CancelInvoice
 {
     use BuildInformationSystem, EnvelopeXml, SanitizeXml, SignXml;
 
-    /**
-     * @var DOMDocument
-     */
     protected DOMDocument $document;
 
-    /**
-     * @var VerifactuSettings
-     */
     protected VerifactuSettings $settings;
 
     protected bool $generated = false;
+
     protected bool $signed = false;
 
     public function __construct(VerifactuSettings $settings)
@@ -40,8 +35,6 @@ class CancelInvoice
     }
 
     /**
-     * @param InvoiceCancellation $cancellation
-     * @return DOMDocument
      * @throws DOMException
      * @throws GeneratorException
      * @throws InvoiceValidationException
