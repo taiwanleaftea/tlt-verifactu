@@ -23,8 +23,6 @@ class TltVerifactuServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../../config/tlt-verifactu.php' => config_path('tlt-verifactu.php'),
         ], 'tlt-verifactu');
-
-        $this->loadJsonTranslationsFrom(__DIR__.'/../../lang');
     }
 
     /**
