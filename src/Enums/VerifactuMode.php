@@ -9,7 +9,6 @@ use InvalidArgumentException;
 enum VerifactuMode: string
 {
     case ONLINE = 'online';
-    case REGISTRY = 'registry';
     case NO_VERIFACTU = 'no_verifactu';
 
     public static function fromConfig(mixed $value): self
@@ -19,11 +18,11 @@ enum VerifactuMode: string
         }
 
         if (! is_string($value)) {
-            throw new InvalidArgumentException('VERIFACTU mode must be "online", "registry" or "no_verifactu".');
+            throw new InvalidArgumentException('VERIFACTU mode must be "online" or "no_verifactu".');
         }
 
         return self::tryFrom(strtolower(trim($value)))
-            ?? throw new InvalidArgumentException('VERIFACTU mode must be "online", "registry" or "no_verifactu".');
+            ?? throw new InvalidArgumentException('VERIFACTU mode must be "online" or "no_verifactu".');
     }
 
     public function sendsRecordsOnline(): bool
@@ -33,7 +32,7 @@ enum VerifactuMode: string
 
     public function storesRecordsOnly(): bool
     {
-        return $this === self::REGISTRY || $this === self::NO_VERIFACTU;
+        return $this === self::NO_VERIFACTU;
     }
 
     public function signsStoredRecords(): bool

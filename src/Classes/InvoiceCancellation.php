@@ -6,7 +6,10 @@ namespace Taiwanleaftea\TltVerifactu\Classes;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Taiwanleaftea\TltVerifactu\Enums\CancellationRejectionStatus;
+use Taiwanleaftea\TltVerifactu\Enums\PreviousRecordStatus;
 use Taiwanleaftea\TltVerifactu\Exceptions\GeneratorException;
+use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
 
 class InvoiceCancellation extends Invoice
 {
@@ -24,6 +27,49 @@ class InvoiceCancellation extends Invoice
         $this->invoiceDate = $invoiceDate;
         $this->previousHash = $invoiceHash;
         $this->timestamp = $timestamp ?? Carbon::now();
+        $this->optionsKeys = ['sin_registro_previo', 'rechazo_previo'];
+    }
+
+    /**
+     * Set/add options
+     *
+     * @throws InvoiceValidationException
+     */
+    public function setOptions(array $options, bool $reset = false): void
+    {
+        if (array_key_exists('sin_registro_previo', $options)) {
+            if ($options['sin_registro_previo'] instanceof PreviousRecordStatus) {
+                $previousRecordStatus = $options['sin_registro_previo'];
+            } elseif (! is_string($options['sin_registro_previo'])) {
+                throw new InvoiceValidationException('Sin registro previo must be a valid PreviousRecordStatus value.');
+            } else {
+                $previousRecordStatus = PreviousRecordStatus::tryFrom($options['sin_registro_previo']);
+            }
+
+            if ($previousRecordStatus === null) {
+                throw new InvoiceValidationException('Sin registro previo must be a valid PreviousRecordStatus value.');
+            }
+
+            $options['sin_registro_previo'] = $previousRecordStatus->value;
+        }
+
+        if (array_key_exists('rechazo_previo', $options)) {
+            if ($options['rechazo_previo'] instanceof CancellationRejectionStatus) {
+                $rejectionStatus = $options['rechazo_previo'];
+            } elseif (! is_string($options['rechazo_previo'])) {
+                throw new InvoiceValidationException('Rechazo previo must be a valid CancellationRejectionStatus value.');
+            } else {
+                $rejectionStatus = CancellationRejectionStatus::tryFrom($options['rechazo_previo']);
+            }
+
+            if ($rejectionStatus === null) {
+                throw new InvoiceValidationException('Rechazo previo must be a valid CancellationRejectionStatus value.');
+            }
+
+            $options['rechazo_previo'] = $rejectionStatus->value;
+        }
+
+        parent::setOptions($options, $reset);
     }
 
     /**

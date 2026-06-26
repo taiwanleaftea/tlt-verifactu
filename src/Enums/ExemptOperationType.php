@@ -26,4 +26,8 @@ enum ExemptOperationType: string
 
     // Exenta por otros
     case E6 = 'E6';
+
+    case E7 = 'E7';
+
+    case E8 = 'E8';
 }

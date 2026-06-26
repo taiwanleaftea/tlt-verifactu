@@ -59,7 +59,7 @@ Edit the published config file and replace the software provider and system valu
 `provider_country`, `provider_id_type`, `system_name`, etc.) with the values for your invoicing system. These values
 are intentionally plain Laravel config values because each application should commit the SIF/provider configuration it uses.
 
-If you use the local registry (`registry` or `no_verifactu` mode), run the package migration:
+Run the package migration before generating VERIFACTU records:
 
 ```bash
 php artisan migrate
@@ -74,17 +74,18 @@ php artisan vendor:publish --tag=tlt-verifactu-migrations --ansi
 Open your `.env` file and add `VERIFACTU_PRODUCTION` (set it to `true` to use the production AEAT server)
 and `VERIFACTU_DISK` (the disk where certificates are stored). `VERIFACTU_MODE` can be used to select the operating
 mode, and `VERIFACTU_REGISTRY_SCOPE` can be used to separate local registry chains for different SIF instances.
+`VERIFACTU_ENABLE_CANCEL_INVOICE_IN_PRODUCTION` is available as an emergency/fallback switch for
+`RegistroAnulacion` in production and defaults to `false`.
 
 ### VERIFACTU Configuration
 
-The package supports three operating modes:
+The package supports two operating modes:
 
 ```php
 'mode' => env('VERIFACTU_MODE', VerifactuMode::ONLINE->value),
 ```
 
-- `online`: sends records to AEAT immediately. Records are not XAdES-signed by default.
-- `registry`: creates and stores unsigned local records in `verifactu_records`.
+- `online`: sends records to AEAT immediately and stores the local registry row. The SOAP record is not XAdES-signed by default, but a signed copy is stored in `signed_xml`.
 - `no_verifactu`: creates local records, signs each record with XAdES-EPES, and stores both unsigned and signed XML.
 
 Optional local registry scope:
@@ -115,15 +116,34 @@ By default, the package checks that the certificate subject NIF matches the invo
 or no VERIFACTU signing. Set this config-only option to `true` only when the certificate belongs to an authorized
 representative (`apoderado` or `colaborador social`) for that issuer.
 
+Cancel invoice fallback:
+
+```php
+'enable_cancel_invoice_in_production' => env('VERIFACTU_ENABLE_CANCEL_INVOICE_IN_PRODUCTION', false),
+```
+
+`cancelInvoice()` / `RegistroAnulacion` is available for sandbox fallback scenarios. In production it is blocked unless
+this option is explicitly enabled. Normal corrections should use `subsanateInvoice()` or
+`submitRectificationInvoice()`.
+
+For registry-backed cancellation fallback, use `cancelInvoiceByRecordId()` with the local `verifactu_records.id`:
+
+```php
+$result = Verifactu::cancelInvoiceByRecordId($invoice->verifactu_record_id);
+```
+
+Low-level `cancelInvoice()` also accepts explicit `sin_registro_previo` and `rechazo_previo` options for documented
+`RegistroAnulacion` edge cases.
+
 ### Local Registry Database
 
 The package provides a `verifactu_records` table for local registry storage. It stores:
 
 - invoice identity and issuer data;
-- record type (`alta` or `anulacion`) and invoice type;
+- record type (`alta`) and invoice type;
 - local chain data (`hash`, `previous_hash`, `previous_record_id`, `registry_scope`);
-- generated unsigned XML in `request_xml`;
-- XAdES-signed XML in `signed_xml` for `no_verifactu` mode;
+- generated unsigned record XML in `request_xml`;
+- XAdES-signed record XML in `signed_xml` for `online` and `no_verifactu` modes;
 - signature policy and certificate metadata;
 - AEAT response fields for future export/submission workflows;
 - `created_at` and `updated_at` timestamps.
@@ -167,9 +187,11 @@ use Taiwanleaftea\TltVerifactu\Classes\Certificate;
 use Taiwanleaftea\TltVerifactu\Classes\LegalPerson;
 use Taiwanleaftea\TltVerifactu\Classes\Recipient;
 use Taiwanleaftea\TltVerifactu\Enums\EstadoRegistro;
+use Taiwanleaftea\TltVerifactu\Enums\ExemptOperationType;
 use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
+use Taiwanleaftea\TltVerifactu\Enums\RejectionStatus;
 use Taiwanleaftea\TltVerifactu\Exceptions\CertificateException;
 use Taiwanleaftea\TltVerifactu\Support\Facades\Verifactu;
 
@@ -199,7 +221,7 @@ try {
     $result = Verifactu::submitInvoice(
         issuer: $issuer,
         invoiceData: $invoice,
-        options: [], // 'subsanacion', 'rectificado'
+        options: [], // 'exempt_operation' => ExemptOperationType::E1
         operationQualificationType: OperationQualificationType::SUBJECT_DIRECT,
         previous: $previous, // or null for the first invoice
         recipient: $recipient,
@@ -231,75 +253,77 @@ if ($result->success) {
 }
 ```
 
-#### Cancel Invoice
+#### Subsanation and Rectification
+
+Use `subsanateInvoice()` when an accepted registry record must be corrected with `Subsanacion=S`. Pass the local
+`verifactu_records.id` of the record being corrected; the method reads the registry record and the latest chain record
+from the local registry:
+
 ```php
-use Illuminate\Support\Carbon;
-use Taiwanleaftea\TltVerifactu\Classes\Certificate;
-use Taiwanleaftea\TltVerifactu\Classes\LegalPerson;
-use Taiwanleaftea\TltVerifactu\Enums\EstadoRegistro;
-use Taiwanleaftea\TltVerifactu\Enums\IdType;
-use Taiwanleaftea\TltVerifactu\Exceptions\CertificateException;
-use Taiwanleaftea\TltVerifactu\Support\Facades\Verifactu;
+$result = Verifactu::subsanateInvoice(
+    issuer: $issuer,
+    recordId: $invoice->verifactu_record_id,
+    invoiceData: $correctedInvoice,
+    operationQualificationType: OperationQualificationType::SUBJECT_DIRECT,
+    recipient: $recipient,
+);
+```
 
-Verifactu::config($certificate);
-$issuer = new LegalPerson('XYZ SA', 'A12345678', 'ES', IdType::NIF);
+For special AEAT operativa after a previous rejection or when the record is not in AEAT, pass `rechazo_previo`
+explicitly to `submitInvoice()` together with `subsanacion`:
 
-$previous = [
-    'number' => '2025/2',
-    'date' => Carbon::createFromFormat('Y-m-d', '2025-01-12'),
-    'hash' => '8B709172FA124AC15D8F8570F941EBA70F99088628D4A59BF675627A7E250F15',
-];
+```php
+$result = Verifactu::submitInvoice(
+    issuer: $issuer,
+    invoiceData: $invoice,
+    options: [
+        'subsanacion' => true,
+        'rechazo_previo' => RejectionStatus::NOT_IN_AEAT, // X
+    ],
+    previous: $previous,
+    recipient: $recipient,
+);
+```
 
-$invoice = [
-    'number' => '2025/2',
-    'date' => Carbon::createFromFormat('Y-m-d', '2025-01-12'),
-];
+Use `submitRectificationInvoice()` for a factura rectificativa. Pass the local `verifactu_records.id` of the invoice
+being rectified; the method reads the rectified invoice identity and latest chain record from the local registry:
 
-try {
-    $result = Verifactu::cancelInvoice(
-        issuer: $issuer,
-        invoiceData: $invoice,
-        previous: $previous,
-    );
-} catch (CertificateException $e) {
-    echo $e->getMessage();
-    exit();
-}
+```php
+$result = Verifactu::submitRectificationInvoice(
+    issuer: $issuer,
+    invoiceData: $rectificationInvoice, // type must be R1, R2, R3, R4 or R5
+    rectifiedRecordId: $originalResult->registryRecordId,
+    operationQualificationType: OperationQualificationType::SUBJECT_DIRECT,
+    recipient: $recipient,
+);
+```
 
-echo $result->hash;
-echo $result->json;
+Rectifying invoices are generated only as `TipoRectificativa=I` (`por diferencias`). Pass the signed difference amounts
+in `invoiceData` (for example negative base, VAT, and total values for a credit note). `TipoRectificativa=S`
+(`por sustitución`) is intentionally not implemented.
 
-if ($result->success) {
-    echo 'Success';
-    echo $result->csv;
-} else {
-    if ($result->status == EstadoRegistro::ACCEPTED_ERRORES) {
-        echo $result->csv;
-    }
+Your ERP invoice table should store a foreign key to `verifactu_records.id` for the generated VERIFACTU record. That
+key is what later ties the ERP invoice to `subsanateInvoice()` and `submitRectificationInvoice()` without relying on
+invoice number/date lookups.
 
-    echo 'Errors:' . PHP_EOL;
-    foreach ($result->errors as $error) {
-        echo $error;
-    }
-}
+To inspect the current chain head for a registry sequence, use:
+
+```php
+$previousId = Verifactu::getPreviousId(recordId: $invoice->verifactu_record_id);
+$previousHash = Verifactu::getPreviousHash(recordId: $invoice->verifactu_record_id);
+```
+
+Passing a `recordId` makes the package derive `issuer_nif` and `registry_scope` from that registry row. You can also
+select the chain explicitly:
+
+```php
+$previousHash = Verifactu::getPreviousHash(
+    issuerNif: 'A12345678',
+    registryScope: 'main-backend',
+);
 ```
 
 #### Local Registry and No VERIFACTU
-
-For a local unsigned registry, set:
-
-```php
-'mode' => VerifactuMode::REGISTRY->value,
-```
-
-`submitInvoice()` and `cancelInvoice()` will generate the VERIFACTU record XML and save it in `verifactu_records`
-without calling AEAT. The response includes:
-
-```php
-echo $result->registryRecordId;
-echo $result->hash;
-echo $result->request; // unsigned RegistroAlta or RegistroAnulacion XML
-```
 
 For a no VERIFACTU registry, set:
 
@@ -317,16 +341,27 @@ $certificate = new Certificate('certificate.p12', 'password');
 Verifactu::config($certificate);
 ```
 
-In `no_verifactu` mode, every `RegistroAlta` and `RegistroAnulacion` is signed immediately with XAdES-EPES and stored
-with signature metadata:
+In `no_verifactu` mode, every `RegistroAlta` is signed immediately with XAdES-EPES and stored with signature metadata:
 
 ```php
 echo $result->request; // unsigned XML
 echo $result->signedRequest; // XAdES-EPES signed XML
+echo $result->registryRecordId;
 ```
 
 The package currently stores the no VERIFACTU registry but does not yet provide an export/remisión por requerimiento
 builder.
+
+In `online` mode, `submitInvoice()` also creates a local `verifactu_records` row after AEAT responds. The table stores
+the unsigned record XML, a XAdES-EPES signed copy, CSV/status/error data, raw AEAT response, and presentation timestamps
+when available. The XML sent to AEAT remains unsigned unless `online_sign_records` is set to `true`.
+
+Correct accepted records with `subsanateInvoice()` when the change belongs to the VERIFACTU record itself, or issue a
+factura rectificativa with `submitRectificationInvoice()` when the invoice content must be corrected.
+
+`cancelInvoiceByRecordId()` and low-level `cancelInvoice()` remain available as sandbox fallback APIs for
+`RegistroAnulacion`. In production they return an error unless
+`VERIFACTU_ENABLE_CANCEL_INVOICE_IN_PRODUCTION=true` is set.
 
 ## QR Code Generation
 

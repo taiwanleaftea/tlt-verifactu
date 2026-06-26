@@ -10,9 +10,11 @@ use Taiwanleaftea\TltVerifactu\Classes\InvoiceSubmission;
 use Taiwanleaftea\TltVerifactu\Classes\LegalPerson;
 use Taiwanleaftea\TltVerifactu\Classes\Recipient;
 use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
+use Taiwanleaftea\TltVerifactu\Enums\ExemptOperationType;
 use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
+use Taiwanleaftea\TltVerifactu\Enums\RejectionStatus;
 use Taiwanleaftea\TltVerifactu\Services\SubmitInvoice;
 
 #[CoversClass(InvoiceSubmission::class)]
@@ -117,6 +119,81 @@ class InvoiceSubmissionTest extends TestCase
         $dom = (new SubmitInvoice($settings))->getXml($invoice);
         $validation = $this->validateXml($dom);
         $this->assertTrue($validation['result'], 'XML testSimplifiedESProvider validation failed.'.PHP_EOL.$validation['errors']);
+    }
+
+    public function test_exempt_operation_uses_operacion_exenta_without_tax_rate_or_tax_amount()
+    {
+        $settings = new VerifactuSettings;
+
+        $issuer = new LegalPerson(
+            'Issuer Name',
+            '89890001K',
+        );
+
+        $invoice = new InvoiceSubmission(
+            $issuer,
+            '12345678/G33',
+            Carbon::createFromFormat('d-m-Y', '01-01-2024'),
+            'Description',
+            InvoiceType::STANDARD,
+            0,
+            100,
+            0,
+            100,
+            Carbon::now()
+        );
+
+        $invoice->setRecipient(new Recipient(
+            $this->recipientName,
+            $this->recipientId,
+            'ES',
+            IdType::NIF
+        ));
+        $invoice->setOptions(['exempt_operation' => ExemptOperationType::E7]);
+
+        $dom = (new SubmitInvoice($settings))->getXml($invoice);
+        $xml = $dom->saveXML();
+        $validation = $this->validateXml($dom);
+
+        $this->assertTrue($validation['result'], 'XML exempt operation validation failed.'.PHP_EOL.$validation['errors']);
+        $this->assertStringContainsString('<sf:OperacionExenta>E7</sf:OperacionExenta>', $xml);
+        $this->assertStringNotContainsString('<sf:CalificacionOperacion>', $xml);
+        $this->assertStringNotContainsString('<sf:TipoImpositivo>', $xml);
+        $this->assertStringNotContainsString('<sf:CuotaRepercutida>', $xml);
+        $this->assertStringContainsString('<sf:CuotaTotal>0.00</sf:CuotaTotal>', $xml);
+    }
+
+    public function test_subsanation_can_include_rechazo_previo()
+    {
+        $settings = new VerifactuSettings;
+
+        $invoice = new InvoiceSubmission(
+            new LegalPerson('Issuer Name', '89890001K'),
+            '12345678/G33',
+            Carbon::createFromFormat('d-m-Y', '01-01-2024'),
+            'Description',
+            InvoiceType::STANDARD,
+            21,
+            110,
+            12.35,
+            123.45,
+            Carbon::now()
+        );
+
+        $invoice->setRecipient(new Recipient($this->recipientName, $this->recipientId, 'ES', IdType::NIF));
+        $invoice->setOperationQualification(OperationQualificationType::SUBJECT_DIRECT);
+        $invoice->setOptions([
+            'subsanacion' => true,
+            'rechazo_previo' => RejectionStatus::NOT_IN_AEAT,
+        ]);
+
+        $dom = (new SubmitInvoice($settings))->getXml($invoice);
+        $xml = $dom->saveXML();
+        $validation = $this->validateXml($dom);
+
+        $this->assertTrue($validation['result'], 'XML subsanation rejection validation failed.'.PHP_EOL.$validation['errors']);
+        $this->assertStringContainsString('<sf:Subsanacion>S</sf:Subsanacion>', $xml);
+        $this->assertStringContainsString('<sf:RechazoPrevio>X</sf:RechazoPrevio>', $xml);
     }
 
     public function test_standard_nones_recipient_nones_provider()

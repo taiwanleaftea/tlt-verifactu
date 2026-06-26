@@ -59,6 +59,16 @@ class CancelInvoice
         $idFactura->appendChild($dom->createElementNS($namespace, 'sf:NumSerieFacturaAnulada', $cancellation->invoiceNumber));
         $idFactura->appendChild($dom->createElementNS($namespace, 'sf:FechaExpedicionFacturaAnulada', $cancellation->getDate()));
 
+        // SinRegistroPrevio
+        if ($cancellation->getOption('sin_registro_previo') !== null) {
+            $registroAnulacion->appendChild($dom->createElementNS($namespace, 'sf:SinRegistroPrevio', $cancellation->getOption('sin_registro_previo')));
+        }
+
+        // RechazoPrevio
+        if ($cancellation->getOption('rechazo_previo') !== null) {
+            $registroAnulacion->appendChild($dom->createElementNS($namespace, 'sf:RechazoPrevio', $cancellation->getOption('rechazo_previo')));
+        }
+
         if ($cancellation->hasGenerator()) {
             $generatorData = $cancellation->getGenerator();
             // GeneradoPor, optional

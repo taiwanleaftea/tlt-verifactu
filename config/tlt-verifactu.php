@@ -4,7 +4,8 @@ use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Enums\VerifactuMode;
 
 return [
-    // "online" sends records to AEAT. "registry" stores unsigned records. "no_verifactu" stores signed records.
+    // "online" sends records to AEAT and stores them locally.
+    // "no_verifactu" stores signed records without online submission.
     'mode' => env('VERIFACTU_MODE', VerifactuMode::ONLINE->value),
 
     // Optional local registry chain scope. Leave null for a single SIF chain.
@@ -18,6 +19,10 @@ return [
     'allow_representative_certificate' => false,
 
     'production' => env('VERIFACTU_PRODUCTION', false),
+
+    // Keep RegistroAnulacion/cancelInvoice disabled in production unless explicitly enabled.
+    // This is intended as a sandbox/fallback feature; normal corrections should use subsanation or rectifying invoices.
+    'enable_cancel_invoice_in_production' => env('VERIFACTU_ENABLE_CANCEL_INVOICE_IN_PRODUCTION', false),
 
     // Disk with certificates
     'disk' => env('VERIFACTU_DISK', 'local'),

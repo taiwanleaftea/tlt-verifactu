@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use Taiwanleaftea\TltVerifactu\Enums\ExemptOperationType;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
+use Taiwanleaftea\TltVerifactu\Enums\RejectionStatus;
 use Taiwanleaftea\TltVerifactu\Enums\TaxRegimeIVA;
 use Taiwanleaftea\TltVerifactu\Enums\TaxType;
 use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
@@ -61,7 +62,7 @@ class InvoiceSubmission extends Invoice
         $this->totalAmount = $totalAmount;
         $this->timestamp = $timestamp;
 
-        $this->optionsKeys = ['subsanacion', 'rectificado'];
+        $this->optionsKeys = ['subsanacion', 'rechazo_previo', 'rectificado', 'exempt_operation'];
     }
 
     /**
@@ -159,6 +160,69 @@ class InvoiceSubmission extends Invoice
     }
 
     /**
+     * Set exempt operation type
+     */
+    public function setExemptOperation(ExemptOperationType $exemptOperation): void
+    {
+        $this->exemptOperation = $exemptOperation;
+    }
+
+    /**
+     * Set/add options
+     *
+     * @throws InvoiceValidationException
+     */
+    public function setOptions(array $options, bool $reset = false): void
+    {
+        $exemptOperation = null;
+        $rejectionStatus = null;
+
+        if (array_key_exists('exempt_operation', $options)) {
+            if ($options['exempt_operation'] instanceof ExemptOperationType) {
+                $exemptOperation = $options['exempt_operation'];
+            } elseif (! is_string($options['exempt_operation'])) {
+                throw new InvoiceValidationException('Exempt operation must be a valid ExemptOperationType value.');
+            } else {
+                $exemptOperation = ExemptOperationType::tryFrom($options['exempt_operation']);
+            }
+
+            if ($exemptOperation === null) {
+                throw new InvoiceValidationException('Exempt operation must be a valid ExemptOperationType value.');
+            }
+        }
+
+        if (array_key_exists('rechazo_previo', $options)) {
+            if ($options['rechazo_previo'] instanceof RejectionStatus) {
+                $rejectionStatus = $options['rechazo_previo'];
+            } elseif (! is_string($options['rechazo_previo'])) {
+                throw new InvoiceValidationException('Rechazo previo must be a valid RejectionStatus value.');
+            } else {
+                $rejectionStatus = RejectionStatus::tryFrom($options['rechazo_previo']);
+            }
+
+            if ($rejectionStatus === null) {
+                throw new InvoiceValidationException('Rechazo previo must be a valid RejectionStatus value.');
+            }
+
+            if ($rejectionStatus !== RejectionStatus::NO && ! array_key_exists('subsanacion', $options)) {
+                throw new InvoiceValidationException('Rechazo previo S or X requires subsanacion.');
+            }
+
+            $options['rechazo_previo'] = $rejectionStatus->value;
+        }
+
+        parent::setOptions($options, $reset);
+
+        if ($reset) {
+            unset($this->exemptOperation);
+        }
+
+        if ($exemptOperation !== null) {
+            $this->setExemptOperation($exemptOperation);
+        }
+    }
+
+    /**
      * Get operation qualification
      *
      * @throws InvoiceValidationException
@@ -187,6 +251,10 @@ class InvoiceSubmission extends Invoice
      */
     public function isVatExemptOperation(): bool
     {
+        if (isset($this->exemptOperation)) {
+            return true;
+        }
+
         if (! isset($this->operationQualification)) {
             throw new InvoiceValidationException('Operation qualification must be set for normal invoice.');
         }

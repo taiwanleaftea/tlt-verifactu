@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Taiwanleaftea\TltVerifactu\Support;
 
+use DOMDocument;
 use DOMException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use SoapClient;
 use SoapFault;
 use SoapVar;
 use Taiwanleaftea\TltVerifactu\Classes\Certificate;
@@ -19,9 +21,9 @@ use Taiwanleaftea\TltVerifactu\Classes\LegalPerson;
 use Taiwanleaftea\TltVerifactu\Classes\Recipient;
 use Taiwanleaftea\TltVerifactu\Classes\ResponseAeat;
 use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
-use Taiwanleaftea\TltVerifactu\Constants\AEAT;
 use Taiwanleaftea\TltVerifactu\Enums\EstadoEnvio;
 use Taiwanleaftea\TltVerifactu\Enums\EstadoRegistro;
+use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
 use Taiwanleaftea\TltVerifactu\Exceptions\CertificateException;
 use Taiwanleaftea\TltVerifactu\Exceptions\GeneratorException;
@@ -53,6 +55,114 @@ class Verifactu
     public function config(Certificate $certificate): void
     {
         $this->certificate = $certificate;
+    }
+
+    public function getPreviousId(?int $recordId = null, ?string $issuerNif = null, ?string $registryScope = null): ?int
+    {
+        $record = $this->previousRegistryRecord($recordId, $issuerNif, $registryScope);
+
+        return $record === null ? null : (int) $record->id;
+    }
+
+    public function getPreviousHash(?int $recordId = null, ?string $issuerNif = null, ?string $registryScope = null): ?string
+    {
+        $record = $this->previousRegistryRecord($recordId, $issuerNif, $registryScope);
+
+        return $record === null ? null : (string) $record->hash;
+    }
+
+    /**
+     * Submit a corrected RegistroAlta for an accepted/accepted-with-errors invoice record.
+     *
+     * @throws CertificateException
+     */
+    public function subsanateInvoice(
+        LegalPerson $issuer,
+        int $recordId,
+        array $invoiceData,
+        OperationQualificationType $operationQualificationType = OperationQualificationType::SUBJECT_DIRECT,
+        ?Recipient $recipient = null,
+        ?Carbon $timestamp = null,
+    ): ResponseAeat {
+        $record = $this->findRegistryRecordById($issuer, $recordId);
+
+        if ($record instanceof ResponseAeat) {
+            return $record;
+        }
+
+        if ($record === null) {
+            return $this->responseWithErrors('Invoice registry record was not found in verifactu_records.');
+        }
+
+        if ($record->status === 'rejected') {
+            return $this->responseWithErrors('Rejected invoice records must be fixed and retried, not subsanated.');
+        }
+
+        $previous = $this->previousPayloadFromLatestRegistryRecord($issuer);
+
+        if ($previous instanceof ResponseAeat) {
+            return $previous;
+        }
+
+        return $this->submitInvoice(
+            issuer: $issuer,
+            invoiceData: $invoiceData,
+            options: ['subsanacion' => true],
+            operationQualificationType: $operationQualificationType,
+            previous: $previous,
+            recipient: $recipient,
+            timestamp: $timestamp,
+        );
+    }
+
+    /**
+     * Submit a factura rectificativa using the rectified invoice data stored in the local registry.
+     *
+     * @throws CertificateException
+     */
+    public function submitRectificationInvoice(
+        LegalPerson $issuer,
+        array $invoiceData,
+        int $rectifiedRecordId,
+        OperationQualificationType $operationQualificationType = OperationQualificationType::SUBJECT_DIRECT,
+        ?Recipient $recipient = null,
+        ?Carbon $timestamp = null,
+    ): ResponseAeat {
+        if (! $this->isRectificationInvoiceType($invoiceData['type'] ?? null)) {
+            return $this->responseWithErrors('Rectification invoice type must be one of R1, R2, R3, R4 or R5.');
+        }
+
+        $rectifiedRecord = $this->findRegistryRecordById($issuer, $rectifiedRecordId);
+
+        if ($rectifiedRecord instanceof ResponseAeat) {
+            return $rectifiedRecord;
+        }
+
+        if ($rectifiedRecord === null) {
+            return $this->responseWithErrors('Invoice registry record was not found in verifactu_records.');
+        }
+
+        $previous = $this->previousPayloadFromLatestRegistryRecord($issuer);
+
+        if ($previous instanceof ResponseAeat) {
+            return $previous;
+        }
+
+        return $this->submitInvoice(
+            issuer: $issuer,
+            invoiceData: $invoiceData,
+            options: [
+                'rectificado' => [
+                    'invoice_number' => $rectifiedRecord->invoice_number,
+                    'invoice_date' => Carbon::parse($rectifiedRecord->invoice_date),
+                    'simplified' => $rectifiedRecord->invoice_type === InvoiceType::SIMPLIFIED->value,
+                ],
+            ],
+            operationQualificationType: $operationQualificationType,
+            previous: $previous,
+            recipient: $recipient,
+            timestamp: $timestamp,
+        );
     }
 
     /**
@@ -203,12 +313,37 @@ class Verifactu
             return $certificateError;
         }
 
+        if (! Schema::hasTable('verifactu_records')) {
+            return $this->responseWithErrors('Online VERIFACTU mode requires the verifactu_records table. Run the package migrations before sending records.');
+        }
+
+        $registroXml = $registroDom->saveXML($registroDom->documentElement);
+
+        if ($registroXml === false) {
+            return $this->responseWithErrors('XML cannot be serialized for registry storage.');
+        }
+
+        $signedXml = null;
+        $signedAt = Carbon::now();
+
         if ($this->settings->signsOnlineRecords()) {
             try {
-                $submission->signXml($this->certificate);
+                $submission->signXml($this->certificate, $signedAt);
             } catch (CertificateException|\Exception $e) {
                 return $this->responseWithErrors('XML cannot be signed: '.$e->getMessage());
             }
+
+            $signedXml = $registroDom->saveXML($registroDom->documentElement);
+        } else {
+            try {
+                $signedXml = $this->signedRegistryXml($registroXml, $signedAt);
+            } catch (CertificateException|\Exception $e) {
+                return $this->responseWithErrors('XML cannot be signed for registry storage: '.$e->getMessage());
+            }
+        }
+
+        if ($signedXml === false || $signedXml === null) {
+            return $this->responseWithErrors('Signed XML cannot be serialized for registry storage.');
         }
 
         try {
@@ -229,7 +364,7 @@ class Verifactu
         ];
 
         try {
-            $soapClient = Soap::createClient(AEAT::WSDL_SANDBOX, $soapOptions);
+            $soapClient = $this->createSoapClient($this->settings->getVerifactuWsdlUrl(), $soapOptions);
         } catch (SoapClientException $e) {
             return $this->responseWithErrors('SOAP client error: '.$e->getMessage());
         }
@@ -250,6 +385,7 @@ class Verifactu
         }
 
         $response = new ResponseAeat;
+        $response->success = false;
         $response->hash = $invoice->hash();
         $response->csv = $soapResponse->CSV ?? null;
         $response->json = json_encode($soapResponse, JSON_FORCE_OBJECT | JSON_PRETTY_PRINT);
@@ -311,10 +447,66 @@ class Verifactu
         $response->response = $soapResponse ?? null;
         $response->rawResponse = $soapClient->__getLastResponse();
 
-        return $response;
+        return $this->storeGeneratedRecord(
+            invoice: $invoice,
+            recordType: 'alta',
+            requestXml: $registroXml,
+            signedXml: $signedXml,
+            signedAt: $signedAt,
+            invoiceType: $invoice->type->value,
+            qrUri: $response->qrURI,
+            aeatResponse: $response,
+        );
     }
 
     /**
+     * Cancel an invoice using the local registry record id as the source of invoice and issuer data.
+     *
+     * @throws CertificateException
+     */
+    public function cancelInvoiceByRecordId(
+        int $recordId,
+        ?Generator $generator = null,
+        ?Carbon $timestamp = null,
+        array $options = [],
+    ): ResponseAeat {
+        $record = $this->findRegistryRecordByIdForCurrentScope($recordId);
+
+        if ($record instanceof ResponseAeat) {
+            return $record;
+        }
+
+        if ($record === null) {
+            return $this->responseWithErrors('Invoice registry record was not found in verifactu_records.');
+        }
+
+        $issuer = new LegalPerson(
+            name: (string) ($record->issuer_name ?: $record->issuer_nif),
+            id: (string) $record->issuer_nif,
+        );
+
+        $previous = $this->previousPayloadFromLatestRegistryRecord($issuer);
+
+        if ($previous instanceof ResponseAeat) {
+            return $previous;
+        }
+
+        return $this->cancelInvoice(
+            issuer: $issuer,
+            invoiceData: [
+                'number' => $record->invoice_number,
+                'date' => Carbon::parse($record->invoice_date),
+            ],
+            previous: $previous,
+            generator: $generator,
+            timestamp: $timestamp,
+            options: $options,
+        );
+    }
+
+    /**
+     * Invoice cancellation fallback for sandbox and explicitly enabled production use.
+     *
      * @throws CertificateException
      */
     public function cancelInvoice(
@@ -323,7 +515,12 @@ class Verifactu
         array $previous,
         ?Generator $generator = null,
         ?Carbon $timestamp = null,
+        array $options = [],
     ): ResponseAeat {
+        if ($this->settings->isProduction() && ! $this->settings->enablesCancelInvoiceInProduction()) {
+            return $this->responseWithErrors('Invoice cancellation is disabled in production. Set VERIFACTU_ENABLE_CANCEL_INVOICE_IN_PRODUCTION=true only when RegistroAnulacion is intentionally required.');
+        }
+
         if (is_null($timestamp)) {
             $timestamp = Carbon::now();
         }
@@ -340,21 +537,27 @@ class Verifactu
             timestamp: $timestamp,
         );
 
-        if ($previous !== null) {
-            $keys = ['number', 'date', 'hash'];
-            if (! $this->checkArray($keys, $previous)) {
-                return $this->responseWithErrors('Previous invoice key is missing.');
-            } else {
-                $invoice->setPreviousInvoice(
-                    number: $previous['number'],
-                    date: $previous['date'],
-                    hash: $previous['hash'],
-                );
-            }
+        $keys = ['number', 'date', 'hash'];
+        if (! $this->checkArray($keys, $previous)) {
+            return $this->responseWithErrors('Previous invoice key is missing.');
         }
+
+        $invoice->setPreviousInvoice(
+            number: $previous['number'],
+            date: $previous['date'],
+            hash: $previous['hash'],
+        );
 
         if ($generator !== null) {
             $invoice->setGenerator($generator);
+        }
+
+        if ($options !== []) {
+            try {
+                $invoice->setOptions($options);
+            } catch (InvoiceValidationException $e) {
+                return $this->responseWithErrors('Invoice cancellation cannot be validated (setOptions): '.$e->getMessage());
+            }
         }
 
         $cancellation = new CancelInvoice($this->settings);
@@ -420,12 +623,37 @@ class Verifactu
             return $certificateError;
         }
 
+        if (! Schema::hasTable('verifactu_records')) {
+            return $this->responseWithErrors('Online VERIFACTU mode requires the verifactu_records table. Run the package migrations before sending records.');
+        }
+
+        $registroXml = $registroDom->saveXML($registroDom->documentElement);
+
+        if ($registroXml === false) {
+            return $this->responseWithErrors('XML cannot be serialized for registry storage.');
+        }
+
+        $signedXml = null;
+        $signedAt = Carbon::now();
+
         if ($this->settings->signsOnlineRecords()) {
             try {
-                $cancellation->signXml($this->certificate);
+                $cancellation->signXml($this->certificate, $signedAt);
             } catch (CertificateException|\Exception $e) {
                 return $this->responseWithErrors('XML cannot be signed: '.$e->getMessage());
             }
+
+            $signedXml = $registroDom->saveXML($registroDom->documentElement);
+        } else {
+            try {
+                $signedXml = $this->signedRegistryXml($registroXml, $signedAt);
+            } catch (CertificateException|\Exception $e) {
+                return $this->responseWithErrors('XML cannot be signed for registry storage: '.$e->getMessage());
+            }
+        }
+
+        if ($signedXml === false || $signedXml === null) {
+            return $this->responseWithErrors('Signed XML cannot be serialized for registry storage.');
         }
 
         try {
@@ -446,7 +674,7 @@ class Verifactu
         ];
 
         try {
-            $soapClient = Soap::createClient(AEAT::WSDL_SANDBOX, $soapOptions);
+            $soapClient = $this->createSoapClient($this->settings->getVerifactuWsdlUrl(), $soapOptions);
         } catch (SoapClientException $e) {
             return $this->responseWithErrors('SOAP client error: '.$e->getMessage());
         }
@@ -467,6 +695,7 @@ class Verifactu
         }
 
         $response = new ResponseAeat;
+        $response->success = false;
         $response->hash = $invoice->hash();
         $response->csv = $soapResponse->CSV ?? null;
         $response->json = json_encode($soapResponse, JSON_FORCE_OBJECT | JSON_PRETTY_PRINT);
@@ -480,7 +709,6 @@ class Verifactu
             if (isset($soapResponse->RespuestaLinea->EstadoRegistro)) {
                 $response->status = EstadoRegistro::tryFrom($soapResponse->RespuestaLinea->EstadoRegistro);
             }
-            // TODO разобрать все три варианта ответа от VF
         } else {
             $response->success = false;
 
@@ -510,7 +738,14 @@ class Verifactu
         $response->response = $soapResponse ?? null;
         $response->rawResponse = $soapClient->__getLastResponse();
 
-        return $response;
+        return $this->storeGeneratedRecord(
+            invoice: $invoice,
+            recordType: 'anulacion',
+            requestXml: $registroXml,
+            signedXml: $signedXml,
+            signedAt: $signedAt,
+            aeatResponse: $response,
+        );
     }
 
     public function generateQrSVG(
@@ -540,7 +775,7 @@ class Verifactu
         string $number,
         float $totalAmount,
     ): string {
-        return QRCode::buildUrl($issuerNIF, $invoiceDate, $number, $totalAmount);
+        return QRCode::buildUrl($issuerNIF, $invoiceDate, $number, $totalAmount, $this->settings->isProduction());
     }
 
     /**
@@ -567,9 +802,10 @@ class Verifactu
         ?Carbon $signedAt = null,
         ?string $invoiceType = null,
         ?string $qrUri = null,
+        ?ResponseAeat $aeatResponse = null,
     ): ResponseAeat {
         if (! Schema::hasTable('verifactu_records')) {
-            return $this->responseWithErrors('VERIFACTU local registry mode requires the verifactu_records table. Run the package migrations before storing records.');
+            return $this->responseWithErrors('VERIFACTU local registry requires the verifactu_records table. Run the package migrations before storing records.');
         }
 
         $hash = $invoice->hash();
@@ -579,6 +815,7 @@ class Verifactu
         $previousRecordId = $previousHash
             ? DB::table('verifactu_records')
                 ->where('registry_scope', $registryScope)
+                ->where('issuer_nif', $invoice->issuer->id)
                 ->where('hash', $previousHash)
                 ->value('id')
             : null;
@@ -594,9 +831,9 @@ class Verifactu
             'invoice_date' => $invoice->invoiceDate->format('Y-m-d'),
             'record_type' => $recordType,
             'invoice_type' => $invoiceType,
-            'status' => $signedXml === null ? 'stored' : 'signed',
-            'estado_envio' => null,
-            'estado_registro' => null,
+            'status' => $this->storedRecordStatus($signedXml, $aeatResponse),
+            'estado_envio' => $this->estadoEnvioFromResponse($aeatResponse),
+            'estado_registro' => $aeatResponse?->status?->value ?? $aeatResponse?->statusRaw,
             'hash' => $hash,
             'previous_hash' => $previousHash,
             'request_xml' => $requestXml,
@@ -613,17 +850,24 @@ class Verifactu
             'certificate_serial_number' => $signatureMetadata['certificate_serial_number'] ?? null,
             'certificate_digest' => $signatureMetadata['certificate_digest'] ?? null,
             'certificate_digest_algorithm' => $signatureMetadata['certificate_digest_algorithm'] ?? null,
-            'response_json' => null,
-            'raw_response' => null,
-            'csv' => null,
+            'response_json' => $aeatResponse?->json ?: null,
+            'raw_response' => $aeatResponse?->rawResponse,
+            'csv' => $aeatResponse?->csv,
             'qr_url' => $qrUri,
-            'aeat_error_code' => null,
-            'aeat_error_description' => null,
-            'sent_at' => null,
-            'accepted_at' => null,
+            'aeat_error_code' => $aeatResponse?->aeatErrorCode,
+            'aeat_error_description' => $this->aeatErrorDescription($aeatResponse),
+            'sent_at' => $aeatResponse === null ? null : Carbon::now(),
+            'accepted_at' => $aeatResponse?->success ? $aeatResponse->timestamp : null,
             'created_at' => Carbon::now(),
             'updated_at' => Carbon::now(),
         ]);
+
+        if ($aeatResponse !== null) {
+            $aeatResponse->registryRecordId = (int) $recordId;
+            $aeatResponse->signedRequest = $signedXml;
+
+            return $aeatResponse;
+        }
 
         $response = new ResponseAeat;
         $response->success = true;
@@ -636,6 +880,33 @@ class Verifactu
         $response->timestamp = $invoice->timestamp;
 
         return $response;
+    }
+
+    /**
+     * @throws CertificateException
+     * @throws \Exception
+     */
+    private function signedRegistryXml(string $registryXml, Carbon $signedAt): string
+    {
+        $dom = new DOMDocument('1.0', 'utf-8');
+
+        if ($dom->loadXML($registryXml) === false) {
+            throw new DOMException('Registry XML cannot be loaded for signing.');
+        }
+
+        $signedDom = (new XadesEpesSigner)->sign($dom, $this->certificate, $signedAt);
+        $signedXml = $signedDom->saveXML($signedDom->documentElement);
+
+        if ($signedXml === false) {
+            throw new DOMException('Signed XML cannot be serialized.');
+        }
+
+        return $signedXml;
+    }
+
+    protected function createSoapClient(string $wsdl, array $options): SoapClient
+    {
+        return Soap::createClient($wsdl, $options);
     }
 
     private function validateIssuerCertificate(LegalPerson $issuer): ?ResponseAeat
@@ -668,6 +939,135 @@ class Verifactu
         $normalized = preg_replace('/[^A-Z0-9]/', '', strtoupper($value));
 
         return is_string($normalized) ? $normalized : strtoupper($value);
+    }
+
+    private function storedRecordStatus(?string $signedXml, ?ResponseAeat $aeatResponse): string
+    {
+        if ($aeatResponse === null) {
+            return $signedXml === null ? 'stored' : 'signed';
+        }
+
+        if ($aeatResponse->status === EstadoRegistro::ACCEPTED_ERRORES) {
+            return 'accepted_with_errors';
+        }
+
+        if ($aeatResponse->success) {
+            return 'accepted';
+        }
+
+        if ($aeatResponse->status === EstadoRegistro::NOT_ACCEPTED) {
+            return 'rejected';
+        }
+
+        return 'sent';
+    }
+
+    private function estadoEnvioFromResponse(?ResponseAeat $response): ?string
+    {
+        if ($response === null || ! is_object($response->response) || ! isset($response->response->EstadoEnvio)) {
+            return null;
+        }
+
+        return (string) $response->response->EstadoEnvio;
+    }
+
+    private function aeatErrorDescription(?ResponseAeat $response): ?string
+    {
+        if ($response === null || $response->errors === []) {
+            return null;
+        }
+
+        return implode(PHP_EOL, $response->errors);
+    }
+
+    private function previousPayloadFromLatestRegistryRecord(LegalPerson $issuer): array|ResponseAeat
+    {
+        if (! Schema::hasTable('verifactu_records')) {
+            return $this->responseWithErrors('VERIFACTU local registry requires the verifactu_records table. Run the package migrations before using registry-backed invoice operations.');
+        }
+
+        $record = $this->previousRegistryRecord(issuerNif: $issuer->id, registryScope: $this->settings->getRegistryScope());
+
+        if ($record === null) {
+            return $this->responseWithErrors('Previous registry record was not found in verifactu_records.');
+        }
+
+        return [
+            'number' => $record->invoice_number,
+            'date' => Carbon::parse($record->invoice_date),
+            'hash' => $record->hash,
+        ];
+    }
+
+    private function findRegistryRecordById(LegalPerson $issuer, int $recordId): \stdClass|ResponseAeat|null
+    {
+        if (! Schema::hasTable('verifactu_records')) {
+            return $this->responseWithErrors('VERIFACTU local registry requires the verifactu_records table. Run the package migrations before using registry-backed invoice operations.');
+        }
+
+        return DB::table('verifactu_records')
+            ->where('id', $recordId)
+            ->where('registry_scope', $this->settings->getRegistryScope())
+            ->where('issuer_nif', $issuer->id)
+            ->where('record_type', 'alta')
+            ->first();
+    }
+
+    private function previousRegistryRecord(?int $recordId = null, ?string $issuerNif = null, ?string $registryScope = null): ?\stdClass
+    {
+        if (! Schema::hasTable('verifactu_records')) {
+            return null;
+        }
+
+        if ($recordId !== null) {
+            $sourceRecord = DB::table('verifactu_records')
+                ->where('id', $recordId)
+                ->first(['issuer_nif', 'registry_scope']);
+
+            if ($sourceRecord === null) {
+                return null;
+            }
+
+            $issuerNif = (string) $sourceRecord->issuer_nif;
+            $registryScope = $sourceRecord->registry_scope === null ? null : (string) $sourceRecord->registry_scope;
+        }
+
+        if ($issuerNif === null || trim($issuerNif) === '') {
+            return null;
+        }
+
+        return DB::table('verifactu_records')
+            ->where('registry_scope', $registryScope)
+            ->where('issuer_nif', $issuerNif)
+            ->whereNotNull('hash')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    private function findRegistryRecordByIdForCurrentScope(int $recordId): \stdClass|ResponseAeat|null
+    {
+        if (! Schema::hasTable('verifactu_records')) {
+            return $this->responseWithErrors('VERIFACTU local registry requires the verifactu_records table. Run the package migrations before using registry-backed invoice operations.');
+        }
+
+        return DB::table('verifactu_records')
+            ->where('id', $recordId)
+            ->where('registry_scope', $this->settings->getRegistryScope())
+            ->where('record_type', 'alta')
+            ->first();
+    }
+
+    private function isRectificationInvoiceType(mixed $value): bool
+    {
+        $type = $value instanceof InvoiceType ? $value : (is_string($value) ? InvoiceType::tryFrom($value) : null);
+
+        return in_array($type, [
+            InvoiceType::RECTIFICATION_1,
+            InvoiceType::RECTIFICATION_2,
+            InvoiceType::RECTIFICATION_3,
+            InvoiceType::RECTIFICATION_4,
+            InvoiceType::RECTIFICATION_SIMPLIFIED,
+        ], true);
     }
 
     private function signatureMetadata(): array

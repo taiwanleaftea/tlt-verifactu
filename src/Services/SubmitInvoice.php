@@ -76,6 +76,11 @@ class SubmitInvoice
             $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:Subsanacion', AEAT::YES));
         }
 
+        // RechazoPrevio
+        if ($invoice->getOption('rechazo_previo') !== null) {
+            $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:RechazoPrevio', $invoice->getOption('rechazo_previo')));
+        }
+
         // TipoFactura, required
         $registroAlta->appendChild($dom->createElementNS($namespace, 'sf:TipoFactura', $invoice->type->value));
 

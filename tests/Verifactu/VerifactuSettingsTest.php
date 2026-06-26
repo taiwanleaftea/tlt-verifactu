@@ -6,6 +6,7 @@ use InvalidArgumentException;
 use Orchestra\Testbench\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
+use Taiwanleaftea\TltVerifactu\Constants\AEAT;
 use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Enums\VerifactuMode;
 
@@ -23,17 +24,21 @@ class VerifactuSettingsTest extends TestCase
         $this->assertNull($settings->getRegistryScope());
         $this->assertFalse($settings->signsOnlineRecords());
         $this->assertFalse($settings->allowsRepresentativeCertificate());
+        $this->assertFalse($settings->enablesCancelInvoiceInProduction());
+        $this->assertSame(AEAT::URL_SANDBOX, $settings->getVerifactuServiceUrl());
+        $this->assertSame(AEAT::WSDL_SANDBOX, $settings->getVerifactuWsdlUrl());
+        $this->assertSame(AEAT::QR_VERIFICATION_SANDBOX, $settings->getQrCheckUrl());
     }
 
-    public function test_registry_mode_only_stores_records(): void
+    public function test_production_mode_uses_production_service_wsdl_and_qr_urls(): void
     {
-        config()->set('tlt-verifactu.mode', 'registry');
+        config()->set('tlt-verifactu.production', true);
 
         $settings = new VerifactuSettings;
 
-        $this->assertSame(VerifactuMode::REGISTRY, $settings->getMode());
-        $this->assertFalse($settings->sendsRecordsOnline());
-        $this->assertTrue($settings->storesRecordsOnly());
+        $this->assertSame(AEAT::URL_PRODUCTION, $settings->getVerifactuServiceUrl());
+        $this->assertSame(AEAT::WSDL, $settings->getVerifactuWsdlUrl());
+        $this->assertSame(AEAT::QR_VERIFICATION_PRODUCTION, $settings->getQrCheckUrl());
     }
 
     public function test_no_verifactu_mode_stores_and_signs_records(): void
@@ -50,10 +55,10 @@ class VerifactuSettingsTest extends TestCase
 
     public function test_invalid_mode_fails_with_clear_message(): void
     {
-        config()->set('tlt-verifactu.mode', 'offline');
+        config()->set('tlt-verifactu.mode', 'registry');
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('VERIFACTU mode must be "online", "registry" or "no_verifactu".');
+        $this->expectExceptionMessage('VERIFACTU mode must be "online" or "no_verifactu".');
 
         new VerifactuSettings;
     }
@@ -83,6 +88,15 @@ class VerifactuSettingsTest extends TestCase
         $settings = new VerifactuSettings;
 
         $this->assertTrue($settings->allowsRepresentativeCertificate());
+    }
+
+    public function test_cancel_invoice_can_be_enabled_in_production(): void
+    {
+        config()->set('tlt-verifactu.enable_cancel_invoice_in_production', true);
+
+        $settings = new VerifactuSettings;
+
+        $this->assertTrue($settings->enablesCancelInvoiceInProduction());
     }
 
     public function test_provider_id_type_can_be_configured(): void

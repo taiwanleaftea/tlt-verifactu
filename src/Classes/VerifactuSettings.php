@@ -10,7 +10,7 @@ use Taiwanleaftea\TltVerifactu\Enums\VerifactuMode;
 
 class VerifactuSettings
 {
-    public const string VERSION = '2.1.0';
+    public const string VERSION = '2.2.0';
 
     public const string SYSTEM_ID = '01';
 
@@ -25,6 +25,8 @@ class VerifactuSettings
     private bool $allowRepresentativeCertificate;
 
     private bool $production;
+
+    private bool $enableCancelInvoiceInProduction;
 
     public function __construct()
     {
@@ -59,6 +61,7 @@ class VerifactuSettings
 
         $this->onlineSignRecords = (bool) config('tlt-verifactu.online_sign_records', false);
         $this->allowRepresentativeCertificate = (bool) config('tlt-verifactu.allow_representative_certificate', false);
+        $this->enableCancelInvoiceInProduction = (bool) config('tlt-verifactu.enable_cancel_invoice_in_production', false);
     }
 
     /**
@@ -134,11 +137,27 @@ class VerifactuSettings
     }
 
     /**
+     * Check if cancelInvoice/RegistroAnulacion is explicitly enabled in production
+     */
+    public function enablesCancelInvoiceInProduction(): bool
+    {
+        return $this->enableCancelInvoiceInProduction;
+    }
+
+    /**
      * Get VERIFACTU Service Url
      */
     public function getVerifactuServiceUrl(): string
     {
         return $this->production ? AEAT::URL_PRODUCTION : AEAT::URL_SANDBOX;
+    }
+
+    /**
+     * Get VERIFACTU WSDL Url
+     */
+    public function getVerifactuWsdlUrl(): string
+    {
+        return $this->production ? AEAT::WSDL : AEAT::WSDL_SANDBOX;
     }
 
     /**
