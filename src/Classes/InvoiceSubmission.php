@@ -37,7 +37,7 @@ class InvoiceSubmission extends Invoice
 
     protected OperationQualificationType $operationQualification;
 
-    public ExemptOperationType $exemptOperation;
+    public ?ExemptOperationType $exemptOperation = null;
 
     public function __construct(
         LegalPerson $issuer,
@@ -214,7 +214,7 @@ class InvoiceSubmission extends Invoice
         parent::setOptions($options, $reset);
 
         if ($reset) {
-            unset($this->exemptOperation);
+            $this->exemptOperation = null;
         }
 
         if ($exemptOperation !== null) {

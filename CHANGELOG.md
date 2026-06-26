@@ -2,6 +2,13 @@
 
 All notable changes to `tlt-verifactu` will be documented in this file.
 
+## 2.2.1 - 2026-06-26
+
+### Fixed
+
+- Fix PHP 8.4 compatibility by avoiding `unset()` on `InvoiceSubmission::$exemptOperation`.
+- Update the test workflow to use `actions/checkout@v5` and explicitly install SQLite extensions.
+
 ## 2.2.0 - 2026-06-26
 
 ### Added

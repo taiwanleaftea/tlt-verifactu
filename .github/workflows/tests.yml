@@ -21,13 +21,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: dom, fileinfo, gd, json, libxml, openssl, soap
+          extensions: dom, fileinfo, gd, json, libxml, openssl, pdo_sqlite, soap, sqlite3
           coverage: none
 
       - name: Validate composer.json
