@@ -2,6 +2,12 @@
 
 All notable changes to `tlt-verifactu` will be documented in this file.
 
+## 2.2.2 - 2026-06-26
+
+### Fixed
+
+- Github workflow permissions added
+
 ## 2.2.1 - 2026-06-26
 
 ### Fixed
