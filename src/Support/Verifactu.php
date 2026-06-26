@@ -50,16 +50,25 @@ class Verifactu
 
     private Certificate $certificate;
 
+    /**
+     * Create a VERIFACTU support service instance using the current package configuration.
+     */
     public function __construct()
     {
         $this->settings = new VerifactuSettings;
     }
 
+    /**
+     * Configure the certificate used for online SOAP communication and XAdES signing.
+     */
     public function config(Certificate $certificate): void
     {
         $this->certificate = $certificate;
     }
 
+    /**
+     * Return the latest registry record for a record's issuer/scope chain or for an explicitly provided issuer/scope.
+     */
     public function getPreviousRecord(VerifactuRecord|int|null $recordId = null, ?string $issuerNif = null, ?string $registryScope = null): ?VerifactuRecord
     {
         if (! Schema::hasTable('verifactu_records')) {
@@ -73,6 +82,9 @@ class Verifactu
         return VerifactuRecord::previousForChain($issuerNif ?? '', $registryScope);
     }
 
+    /**
+     * Return the id of the latest registry record for a record's issuer/scope chain.
+     */
     public function getPreviousRecordId(VerifactuRecord|int|null $recordId = null, ?string $issuerNif = null, ?string $registryScope = null): ?int
     {
         $record = $this->getPreviousRecord($recordId, $issuerNif, $registryScope);
@@ -80,18 +92,24 @@ class Verifactu
         return $record === null ? null : (int) $record->getKey();
     }
 
+    /**
+     * Backward-compatible alias for getPreviousRecordId().
+     */
     public function getPreviousId(VerifactuRecord|int|null $recordId = null, ?string $issuerNif = null, ?string $registryScope = null): ?int
     {
         return $this->getPreviousRecordId($recordId, $issuerNif, $registryScope);
     }
 
+    /**
+     * Return the hash of the latest registry record for a record's issuer/scope chain.
+     */
     public function getPreviousHash(VerifactuRecord|int|null $recordId = null, ?string $issuerNif = null, ?string $registryScope = null): ?string
     {
         return $this->getPreviousRecord($recordId, $issuerNif, $registryScope)?->hash;
     }
 
     /**
-     * Submit a corrected RegistroAlta for an accepted/accepted-with-errors invoice record.
+     * Submit a corrected RegistroAlta with Subsanacion=S for an existing local registry record.
      *
      * @throws CertificateException
      */
@@ -135,7 +153,7 @@ class Verifactu
     }
 
     /**
-     * Submit a factura rectificativa using the rectified invoice data stored in the local registry.
+     * Submit a difference-based factura rectificativa using invoice_payload from the rectified registry record.
      *
      * @throws CertificateException
      */
@@ -205,7 +223,7 @@ class Verifactu
     }
 
     /**
-     * Invoice submission service
+     * Generate and either store or submit a RegistroAlta for a new invoice.
      *
      * @throws CertificateException
      */
@@ -499,7 +517,9 @@ class Verifactu
     }
 
     /**
-     * Invoice cancellation fallback for sandbox and explicitly enabled production use.
+     * Build a RegistroAnulacion from a local registry record and store or submit it as a fallback operation.
+     *
+     * In production this method is disabled unless enable_cancel_invoice_in_production is explicitly enabled.
      *
      * @throws CertificateException
      */
@@ -567,7 +587,7 @@ class Verifactu
     }
 
     /**
-     * Cancel an invoice using the local registry record id as the source of invoice and issuer data.
+     * Backward-compatible alias for cancelInvoice().
      *
      * @throws CertificateException
      */
@@ -773,6 +793,9 @@ class Verifactu
         );
     }
 
+    /**
+     * Generate the AEAT QR verification code as an SVG image.
+     */
     public function generateQrSVG(
         string $issuerNIF,
         Carbon $invoiceDate,
@@ -783,6 +806,8 @@ class Verifactu
     }
 
     /**
+     * Generate the AEAT QR verification code as a PNG image.
+     *
      * @throws QRGeneratorException
      */
     public function generateQrPNG(
@@ -794,6 +819,9 @@ class Verifactu
         return QRCode::PNG($issuerNIF, $invoiceDate, $number, $totalAmount, $this->settings->isProduction());
     }
 
+    /**
+     * Generate the AEAT QR verification URL for an invoice.
+     */
     public function generateQrURI(
         string $issuerNIF,
         Carbon $invoiceDate,
@@ -836,7 +864,16 @@ class Verifactu
         $hash = $invoice->hash();
         $previousHash = $invoice->previousHash ?: null;
         $registryScope = $this->settings->getRegistryScope();
-        $signatureMetadata = $signedXml === null ? [] : $this->signatureMetadata();
+        $signatureMetadata = [];
+
+        if ($signedXml !== null) {
+            try {
+                $signatureMetadata = $this->signatureMetadata();
+            } catch (CertificateException $e) {
+                return $this->responseWithErrors('Signature metadata cannot be read: '.$e->getMessage());
+            }
+        }
+
         $previousRecordId = $previousHash
             ? VerifactuRecord::query()
                 ->where('registry_scope', $registryScope)
@@ -930,6 +967,9 @@ class Verifactu
         return $signedXml;
     }
 
+    /**
+     * @throws SoapClientException
+     */
     protected function createSoapClient(string $wsdl, array $options): SoapClient
     {
         return Soap::createClient($wsdl, $options);
@@ -1342,6 +1382,23 @@ class Verifactu
         ], true);
     }
 
+    /**
+     * @return array{
+     *     signature_format: string,
+     *     signature_algorithm: string,
+     *     signature_policy_id: string,
+     *     signature_policy_url: string,
+     *     signature_policy_hash: string,
+     *     signature_policy_hash_algorithm: string,
+     *     certificate_subject: string,
+     *     certificate_issuer: string,
+     *     certificate_serial_number: string,
+     *     certificate_digest: string,
+     *     certificate_digest_algorithm: string
+     * }
+     *
+     * @throws CertificateException
+     */
     private function signatureMetadata(): array
     {
         return [

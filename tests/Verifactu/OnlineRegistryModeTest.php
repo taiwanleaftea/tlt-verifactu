@@ -19,6 +19,7 @@ use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
 use Taiwanleaftea\TltVerifactu\Enums\VerifactuMode;
+use Taiwanleaftea\TltVerifactu\Exceptions\SoapClientException;
 use Taiwanleaftea\TltVerifactu\Services\XadesEpesSigner;
 use Taiwanleaftea\TltVerifactu\Support\Verifactu;
 
@@ -160,6 +161,38 @@ class OnlineRegistryModeTest extends TestCase
         $this->assertStringStartsWith(AEAT::QR_VERIFICATION_PRODUCTION, $uri);
     }
 
+    public function test_submit_invoice_returns_error_when_soap_client_cannot_be_created(): void
+    {
+        Storage::fake('local');
+        config()->set('tlt-verifactu.disk', 'local');
+        Storage::disk('local')->put('test-certificate.p12', $this->createPkcs12Certificate('secret'));
+
+        $verifactu = new FakeFailingOnlineRegistryVerifactu;
+        $verifactu->config(new Certificate('test-certificate.p12', 'secret'));
+
+        $response = $verifactu->submitInvoice(
+            issuer: new LegalPerson('Issuer Name', '89890001K'),
+            invoiceData: [
+                'number' => 'A-1',
+                'date' => Carbon::createFromFormat('d-m-Y', '01-01-2026'),
+                'description' => 'Invoice description',
+                'type' => InvoiceType::STANDARD,
+                'amount' => 121,
+                'base' => 100,
+                'vat' => 21,
+                'rate' => 21,
+            ],
+            options: [],
+            operationQualificationType: OperationQualificationType::SUBJECT_DIRECT,
+            recipient: new Recipient('Buyer Name', '12345678L', 'ES', IdType::NIF),
+            timestamp: Carbon::parse('2026-01-01T10:00:00+01:00'),
+        );
+
+        $this->assertFalse($response->success);
+        $this->assertSame(['SOAP client error: SOAP unavailable'], $response->errors);
+        $this->assertSame(0, DB::table('verifactu_records')->count());
+    }
+
     private function configuredVerifactu(FakeVerifactuSoapClient $soapClient): FakeOnlineRegistryVerifactu
     {
         Storage::fake('local');
@@ -205,6 +238,17 @@ class FakeOnlineRegistryVerifactu extends Verifactu
         $this->soapClient->options = $options;
 
         return $this->soapClient;
+    }
+}
+
+class FakeFailingOnlineRegistryVerifactu extends Verifactu
+{
+    /**
+     * @throws SoapClientException
+     */
+    protected function createSoapClient(string $wsdl, array $options): SoapClient
+    {
+        throw new SoapClientException('SOAP unavailable');
     }
 }
 

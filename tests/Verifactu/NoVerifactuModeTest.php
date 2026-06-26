@@ -20,6 +20,7 @@ use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
 use Taiwanleaftea\TltVerifactu\Enums\PreviousRecordStatus;
 use Taiwanleaftea\TltVerifactu\Enums\VerifactuMode;
 use Taiwanleaftea\TltVerifactu\Enums\VerifactuRecordType;
+use Taiwanleaftea\TltVerifactu\Exceptions\CertificateException;
 use Taiwanleaftea\TltVerifactu\Models\VerifactuRecord;
 use Taiwanleaftea\TltVerifactu\Services\XadesEpesSigner;
 use Taiwanleaftea\TltVerifactu\Support\Verifactu;
@@ -112,6 +113,29 @@ class NoVerifactuModeTest extends TestCase
         $this->assertNotEmpty($record->certificate_digest);
         $this->assertSame(XadesEpesSigner::CERTIFICATE_DIGEST_ALGORITHM, $record->certificate_digest_algorithm);
         $this->assertNotNull($record->signed_at);
+    }
+
+    public function test_submit_invoice_returns_error_when_signature_metadata_cannot_be_read(): void
+    {
+        Storage::fake('local');
+        config()->set('tlt-verifactu.disk', 'local');
+        Storage::disk('local')->put('test-certificate.p12', $this->createPkcs12Certificate('secret', '89890001K'));
+
+        $verifactu = new Verifactu;
+        $verifactu->config(new BrokenSignatureMetadataCertificate('test-certificate.p12', 'secret'));
+
+        $response = $verifactu->submitInvoice(
+            issuer: new LegalPerson('Issuer Name', '89890001K'),
+            invoiceData: $this->invoiceData('A-1'),
+            options: [],
+            operationQualificationType: OperationQualificationType::SUBJECT_DIRECT,
+            recipient: new Recipient('Buyer Name', '12345678L', 'ES', IdType::NIF),
+            timestamp: Carbon::parse('2026-01-01T10:00:00+01:00'),
+        );
+
+        $this->assertFalse($response->success);
+        $this->assertSame(['Signature metadata cannot be read: Metadata failure'], $response->errors);
+        $this->assertSame(0, DB::table('verifactu_records')->count());
     }
 
     public function test_submit_invoice_rejects_certificate_with_different_nif(): void
@@ -606,5 +630,21 @@ class NoVerifactuModeTest extends TestCase
         openssl_pkcs12_export($certificate, $pkcs12, $privateKey, $password);
 
         return $pkcs12;
+    }
+}
+
+class BrokenSignatureMetadataCertificate extends Certificate
+{
+    public function getSubjectNif(): ?string
+    {
+        return '89890001K';
+    }
+
+    /**
+     * @throws CertificateException
+     */
+    public function getSubjectName(): string
+    {
+        throw new CertificateException('Metadata failure');
     }
 }

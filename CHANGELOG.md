@@ -2,6 +2,13 @@
 
 All notable changes to `tlt-verifactu` will be documented in this file.
 
+## 2.2.4 - 2026-06-26
+
+### Fixed
+
+- Handle certificate signature metadata failures as `ResponseAeat` errors instead of leaking exceptions.
+- Document `createSoapClient()` and `signatureMetadata()` exception contracts and cover their error paths in tests.
+
 ## 2.2.3 - 2026-06-26
 
 ### Added
@@ -13,13 +20,13 @@ All notable changes to `tlt-verifactu` will be documented in this file.
 
 - Use the `VerifactuRecord` Eloquent model for local registry persistence and lookup inside the VERIFACTU service.
 - Simplify `cancelInvoice()` so it builds `RegistroAnulacion` from a local `VerifactuRecord` or record id.
-- Simplify `submitRectificationInvoice()` so it can build a difference rectification from the stored local registry XML.
+- Simplify `submitRectificationInvoice()` so it can build a difference rectification from `invoice_payload`.
 
 ## 2.2.2 - 2026-06-26
 
 ### Fixed
 
-- Github workflow permissions added
+- GitHub workflow permissions added
 
 ## 2.2.1 - 2026-06-26
 
