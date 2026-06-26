@@ -357,6 +357,7 @@ In `no_verifactu` mode, every `RegistroAlta` is signed immediately with XAdES-EP
 echo $result->request; // unsigned XML
 echo $result->signedRequest; // XAdES-EPES signed XML
 echo $result->registryRecordId;
+echo $result->registryRecord?->id;
 ```
 
 The package currently stores the no VERIFACTU registry but does not yet provide an export/remisión por requerimiento

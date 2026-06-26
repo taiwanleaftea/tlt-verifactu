@@ -91,6 +91,7 @@ class OnlineRegistryModeTest extends TestCase
         $this->assertTrue($response->success);
         $this->assertFalse($response->storedOnly);
         $this->assertSame(1, $response->registryRecordId);
+        $this->assertSame(1, $response->registryRecord?->id);
         $this->assertSame('CSV123456789', $response->csv);
         $this->assertSame(AEAT::WSDL_SANDBOX, $soapClient->wsdl);
         $this->assertSame(AEAT::URL_SANDBOX, $soapClient->options['location']);

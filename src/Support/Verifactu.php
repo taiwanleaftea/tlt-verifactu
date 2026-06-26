@@ -883,8 +883,6 @@ class Verifactu
             : null;
 
         $record = VerifactuRecord::create([
-            'recordable_type' => null,
-            'recordable_id' => null,
             'previous_record_id' => $previousRecordId,
             'registry_scope' => $registryScope,
             'issuer_nif' => $invoice->issuer->id,
@@ -927,6 +925,7 @@ class Verifactu
 
         if ($aeatResponse !== null) {
             $aeatResponse->registryRecordId = $recordId;
+            $aeatResponse->registryRecord = $record;
             $aeatResponse->signedRequest = $signedXml;
 
             return $aeatResponse;
@@ -936,6 +935,7 @@ class Verifactu
         $response->success = true;
         $response->storedOnly = true;
         $response->registryRecordId = $recordId;
+        $response->registryRecord = $record;
         $response->hash = $hash;
         $response->request = $requestXml;
         $response->signedRequest = $signedXml;

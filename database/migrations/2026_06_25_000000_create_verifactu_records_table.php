@@ -18,7 +18,6 @@ return new class extends Migration
 
         Schema::create('verifactu_records', function (Blueprint $table): void {
             $table->id();
-            $table->nullableMorphs('recordable');
             $table->foreignId('previous_record_id')->nullable()->index();
             $table->string('registry_scope', 80)->nullable()->index();
             $table->string('issuer_nif', 20)->index();

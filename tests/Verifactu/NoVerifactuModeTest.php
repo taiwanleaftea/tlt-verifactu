@@ -90,6 +90,8 @@ class NoVerifactuModeTest extends TestCase
 
         $this->assertTrue($response->success);
         $this->assertNotNull($response->signedRequest);
+        $this->assertInstanceOf(VerifactuRecord::class, $response->registryRecord);
+        $this->assertSame($response->registryRecordId, $response->registryRecord->id);
         $this->assertSame('signed', $record->status);
         $this->assertStringContainsString('<sf:RegistroAlta', $record->request_xml);
         $this->assertStringNotContainsString('<ds:Signature', $record->request_xml);

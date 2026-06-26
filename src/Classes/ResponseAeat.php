@@ -4,6 +4,7 @@ namespace Taiwanleaftea\TltVerifactu\Classes;
 
 use Illuminate\Support\Carbon;
 use Taiwanleaftea\TltVerifactu\Enums\EstadoRegistro;
+use Taiwanleaftea\TltVerifactu\Models\VerifactuRecord;
 
 /*
  * AEAT response
@@ -39,6 +40,8 @@ class ResponseAeat extends Response
     public string $json = '';
 
     public ?int $registryRecordId = null;
+
+    public ?VerifactuRecord $registryRecord = null;
 
     public bool $storedOnly = false;
 }

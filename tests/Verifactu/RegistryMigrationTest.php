@@ -39,6 +39,8 @@ class RegistryMigrationTest extends TestCase
             DB::select('PRAGMA table_info(verifactu_records)')
         );
 
+        $this->assertNotContains('recordable_type', $columns);
+        $this->assertNotContains('recordable_id', $columns);
         $this->assertContains('request_xml', $columns);
         $this->assertContains('signed_xml', $columns);
         $this->assertContains('invoice_payload', $columns);

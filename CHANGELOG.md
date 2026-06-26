@@ -2,6 +2,12 @@
 
 All notable changes to `tlt-verifactu` will be documented in this file.
 
+## 2.2.5 - 2026-06-26
+
+### Added
+
+- Add `ResponseAeat::$registryRecord` while keeping `registryRecordId` for backward compatibility.
+
 ## 2.2.4 - 2026-06-26
 
 ### Fixed
