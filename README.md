@@ -122,33 +122,39 @@ Cancel invoice fallback:
 'enable_cancel_invoice_in_production' => env('VERIFACTU_ENABLE_CANCEL_INVOICE_IN_PRODUCTION', false),
 ```
 
-`cancelInvoice()` / `RegistroAnulacion` is available for sandbox fallback scenarios. In production it is blocked unless
-this option is explicitly enabled. Normal corrections should use `subsanateInvoice()` or
-`submitRectificationInvoice()`.
+`cancelInvoice()` / `RegistroAnulacion` is available for sandbox fallback scenarios. It receives the local
+`VerifactuRecord` model or `verifactu_records.id` and builds the cancellation record from the local registry. In
+production it is blocked unless this option is explicitly enabled. Normal corrections should use `subsanateInvoice()`
+or `submitRectificationInvoice()`.
 
-For registry-backed cancellation fallback, use `cancelInvoiceByRecordId()` with the local `verifactu_records.id`:
+Use `cancelInvoice()` with the local `verifactu_records.id` or a `VerifactuRecord` model:
 
 ```php
-$result = Verifactu::cancelInvoiceByRecordId($invoice->verifactu_record_id);
+$result = Verifactu::cancelInvoice(record: $invoice->verifactu_record_id);
 ```
 
-Low-level `cancelInvoice()` also accepts explicit `sin_registro_previo` and `rechazo_previo` options for documented
-`RegistroAnulacion` edge cases.
+`cancelInvoiceByRecordId()` remains as a backward-compatible alias. `cancelInvoice()` also accepts explicit
+`sin_registro_previo` and `rechazo_previo` options for documented `RegistroAnulacion` edge cases.
 
 ### Local Registry Database
 
 The package provides a `verifactu_records` table for local registry storage. It stores:
 
 - invoice identity and issuer data;
-- record type (`alta`) and invoice type;
+- enum-backed record type (`alta`/`anulacion`) and invoice type;
 - local chain data (`hash`, `previous_hash`, `previous_record_id`, `registry_scope`);
 - generated unsigned record XML in `request_xml`;
 - XAdES-signed record XML in `signed_xml` for `online` and `no_verifactu` modes;
+- normalized invoice snapshot in `invoice_payload` for registry-backed operations;
 - signature policy and certificate metadata;
 - AEAT response fields for future export/submission workflows;
 - `created_at` and `updated_at` timestamps.
 
 If the table already exists, the migration fails with a clear message instead of overwriting an existing registry.
+The `Taiwanleaftea\TltVerifactu\Models\VerifactuRecord` Eloquent model is available with casts for
+`record_type` (`VerifactuRecordType`), `invoice_type` (`InvoiceType`), `invoice_payload`, and `response_json`. It also provides
+`getPreviousRecord()`, `getPreviousRecordId()`, and `getPreviousHash()` helpers for the record's
+`issuer_nif` / `registry_scope` chain.
 
 ## Usage
 
@@ -256,8 +262,8 @@ if ($result->success) {
 #### Subsanation and Rectification
 
 Use `subsanateInvoice()` when an accepted registry record must be corrected with `Subsanacion=S`. Pass the local
-`verifactu_records.id` of the record being corrected; the method reads the registry record and the latest chain record
-from the local registry:
+`verifactu_records.id` or a `VerifactuRecord` model of the record being corrected; the method reads the registry record
+and the latest chain record from the local registry:
 
 ```php
 $result = Verifactu::subsanateInvoice(
@@ -285,22 +291,22 @@ $result = Verifactu::submitInvoice(
 );
 ```
 
-Use `submitRectificationInvoice()` for a factura rectificativa. Pass the local `verifactu_records.id` of the invoice
-being rectified; the method reads the rectified invoice identity and latest chain record from the local registry:
+Use `submitRectificationInvoice()` for a factura rectificativa. Pass the local `verifactu_records.id` or a
+`VerifactuRecord` model of the invoice being rectified. The method reads the issuer, recipient, original invoice
+identity, original amounts, and latest chain record from the local registry's `invoice_payload`. Pass the new
+rectification invoice number in `invoiceData`; other values can be overridden when necessary:
 
 ```php
 $result = Verifactu::submitRectificationInvoice(
-    issuer: $issuer,
-    invoiceData: $rectificationInvoice, // type must be R1, R2, R3, R4 or R5
     rectifiedRecordId: $originalResult->registryRecordId,
-    operationQualificationType: OperationQualificationType::SUBJECT_DIRECT,
-    recipient: $recipient,
+    invoiceData: ['number' => 'R-2026-001'],
 );
 ```
 
-Rectifying invoices are generated only as `TipoRectificativa=I` (`por diferencias`). Pass the signed difference amounts
-in `invoiceData` (for example negative base, VAT, and total values for a credit note). `TipoRectificativa=S`
-(`por sustitución`) is intentionally not implemented.
+Rectifying invoices are generated only as `TipoRectificativa=I` (`por diferencias`). By default the package derives a
+credit note with negative base, VAT, and total values from `invoice_payload`. `TipoRectificativa=S`
+(`por sustitución`) is intentionally not implemented. The rectification invoice type defaults to `R4`, or `R5` when
+the rectified invoice was simplified; pass `type` in `invoiceData` to use another `R1`-`R5` value.
 
 Your ERP invoice table should store a foreign key to `verifactu_records.id` for the generated VERIFACTU record. That
 key is what later ties the ERP invoice to `subsanateInvoice()` and `submitRectificationInvoice()` without relying on
@@ -309,8 +315,12 @@ invoice number/date lookups.
 To inspect the current chain head for a registry sequence, use:
 
 ```php
-$previousId = Verifactu::getPreviousId(recordId: $invoice->verifactu_record_id);
+$previousId = Verifactu::getPreviousRecordId(recordId: $invoice->verifactu_record_id);
 $previousHash = Verifactu::getPreviousHash(recordId: $invoice->verifactu_record_id);
+$previousRecord = Verifactu::getPreviousRecord(recordId: $invoice->verifactuRecord);
+
+// Backward-compatible alias:
+$previousId = Verifactu::getPreviousId(recordId: $invoice->verifactu_record_id);
 ```
 
 Passing a `recordId` makes the package derive `issuer_nif` and `registry_scope` from that registry row. You can also
@@ -359,9 +369,9 @@ when available. The XML sent to AEAT remains unsigned unless `online_sign_record
 Correct accepted records with `subsanateInvoice()` when the change belongs to the VERIFACTU record itself, or issue a
 factura rectificativa with `submitRectificationInvoice()` when the invoice content must be corrected.
 
-`cancelInvoiceByRecordId()` and low-level `cancelInvoice()` remain available as sandbox fallback APIs for
-`RegistroAnulacion`. In production they return an error unless
-`VERIFACTU_ENABLE_CANCEL_INVOICE_IN_PRODUCTION=true` is set.
+`cancelInvoice()` remains available as a sandbox fallback API for `RegistroAnulacion`. In production it returns an
+error unless `VERIFACTU_ENABLE_CANCEL_INVOICE_IN_PRODUCTION=true` is set. `cancelInvoiceByRecordId()` is kept as a
+backward-compatible alias.
 
 ## QR Code Generation
 

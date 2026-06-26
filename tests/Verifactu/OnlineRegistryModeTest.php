@@ -103,7 +103,7 @@ class OnlineRegistryModeTest extends TestCase
         $this->assertSame('Correcto', $record->estado_registro);
         $this->assertSame('CSV123456789', $record->csv);
         $this->assertSame('<soap-response/>', $record->raw_response);
-        $this->assertStringContainsString('"EstadoEnvio": "Correcto"', $record->response_json);
+        $this->assertSame('Correcto', json_decode($record->response_json, true)['EstadoEnvio']);
         $this->assertStringContainsString('<sf:RegistroAlta', $record->request_xml);
         $this->assertStringNotContainsString('<ds:Signature', $record->request_xml);
         $this->assertStringContainsString('<ds:Signature', $record->signed_xml);

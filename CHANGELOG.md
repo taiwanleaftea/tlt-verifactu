@@ -2,6 +2,19 @@
 
 All notable changes to `tlt-verifactu` will be documented in this file.
 
+## 2.2.3 - 2026-06-26
+
+### Added
+
+- Add `VerifactuRecordType` enum and `VerifactuRecord` Eloquent model for the local registry table.
+- Add `VerifactuRecord` chain helpers and allow registry-backed APIs to receive either a record id or model instance.
+
+### Changed
+
+- Use the `VerifactuRecord` Eloquent model for local registry persistence and lookup inside the VERIFACTU service.
+- Simplify `cancelInvoice()` so it builds `RegistroAnulacion` from a local `VerifactuRecord` or record id.
+- Simplify `submitRectificationInvoice()` so it can build a difference rectification from the stored local registry XML.
+
 ## 2.2.2 - 2026-06-26
 
 ### Fixed

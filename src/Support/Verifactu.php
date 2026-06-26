@@ -7,7 +7,6 @@ namespace Taiwanleaftea\TltVerifactu\Support;
 use DOMDocument;
 use DOMException;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use SoapClient;
 use SoapFault;
@@ -23,14 +22,18 @@ use Taiwanleaftea\TltVerifactu\Classes\ResponseAeat;
 use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
 use Taiwanleaftea\TltVerifactu\Enums\EstadoEnvio;
 use Taiwanleaftea\TltVerifactu\Enums\EstadoRegistro;
+use Taiwanleaftea\TltVerifactu\Enums\ExemptOperationType;
+use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
+use Taiwanleaftea\TltVerifactu\Enums\VerifactuRecordType;
 use Taiwanleaftea\TltVerifactu\Exceptions\CertificateException;
 use Taiwanleaftea\TltVerifactu\Exceptions\GeneratorException;
 use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
 use Taiwanleaftea\TltVerifactu\Exceptions\QRGeneratorException;
 use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
 use Taiwanleaftea\TltVerifactu\Exceptions\SoapClientException;
+use Taiwanleaftea\TltVerifactu\Models\VerifactuRecord;
 use Taiwanleaftea\TltVerifactu\Services\CancelInvoice;
 use Taiwanleaftea\TltVerifactu\Services\QRCode;
 use Taiwanleaftea\TltVerifactu\Services\Soap;
@@ -57,18 +60,34 @@ class Verifactu
         $this->certificate = $certificate;
     }
 
-    public function getPreviousId(?int $recordId = null, ?string $issuerNif = null, ?string $registryScope = null): ?int
+    public function getPreviousRecord(VerifactuRecord|int|null $recordId = null, ?string $issuerNif = null, ?string $registryScope = null): ?VerifactuRecord
     {
-        $record = $this->previousRegistryRecord($recordId, $issuerNif, $registryScope);
+        if (! Schema::hasTable('verifactu_records')) {
+            return null;
+        }
 
-        return $record === null ? null : (int) $record->id;
+        if ($recordId !== null) {
+            return $this->resolveRegistryRecord($recordId)?->getPreviousRecord();
+        }
+
+        return VerifactuRecord::previousForChain($issuerNif ?? '', $registryScope);
     }
 
-    public function getPreviousHash(?int $recordId = null, ?string $issuerNif = null, ?string $registryScope = null): ?string
+    public function getPreviousRecordId(VerifactuRecord|int|null $recordId = null, ?string $issuerNif = null, ?string $registryScope = null): ?int
     {
-        $record = $this->previousRegistryRecord($recordId, $issuerNif, $registryScope);
+        $record = $this->getPreviousRecord($recordId, $issuerNif, $registryScope);
 
-        return $record === null ? null : (string) $record->hash;
+        return $record === null ? null : (int) $record->getKey();
+    }
+
+    public function getPreviousId(VerifactuRecord|int|null $recordId = null, ?string $issuerNif = null, ?string $registryScope = null): ?int
+    {
+        return $this->getPreviousRecordId($recordId, $issuerNif, $registryScope);
+    }
+
+    public function getPreviousHash(VerifactuRecord|int|null $recordId = null, ?string $issuerNif = null, ?string $registryScope = null): ?string
+    {
+        return $this->getPreviousRecord($recordId, $issuerNif, $registryScope)?->hash;
     }
 
     /**
@@ -78,7 +97,7 @@ class Verifactu
      */
     public function subsanateInvoice(
         LegalPerson $issuer,
-        int $recordId,
+        VerifactuRecord|int $recordId,
         array $invoiceData,
         OperationQualificationType $operationQualificationType = OperationQualificationType::SUBJECT_DIRECT,
         ?Recipient $recipient = null,
@@ -121,15 +140,15 @@ class Verifactu
      * @throws CertificateException
      */
     public function submitRectificationInvoice(
-        LegalPerson $issuer,
-        array $invoiceData,
-        int $rectifiedRecordId,
-        OperationQualificationType $operationQualificationType = OperationQualificationType::SUBJECT_DIRECT,
+        VerifactuRecord|int|null $rectifiedRecordId = null,
+        ?array $invoiceData = null,
+        ?LegalPerson $issuer = null,
+        ?OperationQualificationType $operationQualificationType = null,
         ?Recipient $recipient = null,
         ?Carbon $timestamp = null,
     ): ResponseAeat {
-        if (! $this->isRectificationInvoiceType($invoiceData['type'] ?? null)) {
-            return $this->responseWithErrors('Rectification invoice type must be one of R1, R2, R3, R4 or R5.');
+        if ($rectifiedRecordId === null) {
+            return $this->responseWithErrors('Invoice registry record is required for submitRectificationInvoice.');
         }
 
         $rectifiedRecord = $this->findRegistryRecordById($issuer, $rectifiedRecordId);
@@ -142,6 +161,23 @@ class Verifactu
             return $this->responseWithErrors('Invoice registry record was not found in verifactu_records.');
         }
 
+        $issuer ??= new LegalPerson(
+            name: (string) ($rectifiedRecord->issuer_name ?: $rectifiedRecord->issuer_nif),
+            id: (string) $rectifiedRecord->issuer_nif,
+        );
+
+        $rectification = $this->buildRectificationInvoiceFromRecord(
+            rectifiedRecord: $rectifiedRecord,
+            invoiceData: $invoiceData,
+            operationQualificationType: $operationQualificationType,
+            recipient: $recipient,
+            timestamp: $timestamp,
+        );
+
+        if ($rectification instanceof ResponseAeat) {
+            return $rectification;
+        }
+
         $previous = $this->previousPayloadFromLatestRegistryRecord($issuer);
 
         if ($previous instanceof ResponseAeat) {
@@ -150,17 +186,20 @@ class Verifactu
 
         return $this->submitInvoice(
             issuer: $issuer,
-            invoiceData: $invoiceData,
-            options: [
-                'rectificado' => [
-                    'invoice_number' => $rectifiedRecord->invoice_number,
-                    'invoice_date' => Carbon::parse($rectifiedRecord->invoice_date),
-                    'simplified' => $rectifiedRecord->invoice_type === InvoiceType::SIMPLIFIED->value,
-                ],
-            ],
-            operationQualificationType: $operationQualificationType,
+            invoiceData: $rectification['invoiceData'],
+            options: array_merge(
+                $rectification['options'],
+                [
+                    'rectificado' => [
+                        'invoice_number' => $rectifiedRecord->invoice_number,
+                        'invoice_date' => Carbon::parse($rectifiedRecord->invoice_date),
+                        'simplified' => $rectifiedRecord->invoice_type === InvoiceType::SIMPLIFIED,
+                    ],
+                ]
+            ),
+            operationQualificationType: $rectification['operationQualificationType'],
             previous: $previous,
-            recipient: $recipient,
+            recipient: $rectification['recipient'],
             timestamp: $timestamp,
         );
     }
@@ -290,7 +329,7 @@ class Verifactu
 
             return $this->storeGeneratedRecord(
                 invoice: $invoice,
-                recordType: 'alta',
+                recordType: VerifactuRecordType::ALTA,
                 requestXml: $registroXml,
                 signedXml: $signedXml,
                 signedAt: $signedAt,
@@ -389,7 +428,7 @@ class Verifactu
         $response->hash = $invoice->hash();
         $response->csv = $soapResponse->CSV ?? null;
         $response->json = json_encode($soapResponse, JSON_FORCE_OBJECT | JSON_PRETTY_PRINT);
-        $response->timestamp = $timestamp;
+        $response->timestamp = $invoice->timestamp;
 
         if (! isset($soapResponse->EstadoEnvio)) {
             $response->errors[] = 'EstadoEnvio has not been received.';
@@ -449,7 +488,7 @@ class Verifactu
 
         return $this->storeGeneratedRecord(
             invoice: $invoice,
-            recordType: 'alta',
+            recordType: VerifactuRecordType::ALTA,
             requestXml: $registroXml,
             signedXml: $signedXml,
             signedAt: $signedAt,
@@ -460,17 +499,25 @@ class Verifactu
     }
 
     /**
-     * Cancel an invoice using the local registry record id as the source of invoice and issuer data.
+     * Invoice cancellation fallback for sandbox and explicitly enabled production use.
      *
      * @throws CertificateException
      */
-    public function cancelInvoiceByRecordId(
-        int $recordId,
+    public function cancelInvoice(
+        VerifactuRecord|int $record,
         ?Generator $generator = null,
         ?Carbon $timestamp = null,
         array $options = [],
     ): ResponseAeat {
-        $record = $this->findRegistryRecordByIdForCurrentScope($recordId);
+        if ($this->settings->isProduction() && ! $this->settings->enablesCancelInvoiceInProduction()) {
+            return $this->responseWithErrors('Invoice cancellation is disabled in production. Set VERIFACTU_ENABLE_CANCEL_INVOICE_IN_PRODUCTION=true only when RegistroAnulacion is intentionally required.');
+        }
+
+        if (is_null($timestamp)) {
+            $timestamp = Carbon::now();
+        }
+
+        $record = $this->findRegistryRecordByIdForCurrentScope($record);
 
         if ($record instanceof ResponseAeat) {
             return $record;
@@ -491,56 +538,12 @@ class Verifactu
             return $previous;
         }
 
-        return $this->cancelInvoice(
-            issuer: $issuer,
-            invoiceData: [
-                'number' => $record->invoice_number,
-                'date' => Carbon::parse($record->invoice_date),
-            ],
-            previous: $previous,
-            generator: $generator,
-            timestamp: $timestamp,
-            options: $options,
-        );
-    }
-
-    /**
-     * Invoice cancellation fallback for sandbox and explicitly enabled production use.
-     *
-     * @throws CertificateException
-     */
-    public function cancelInvoice(
-        LegalPerson $issuer,
-        array $invoiceData,
-        array $previous,
-        ?Generator $generator = null,
-        ?Carbon $timestamp = null,
-        array $options = [],
-    ): ResponseAeat {
-        if ($this->settings->isProduction() && ! $this->settings->enablesCancelInvoiceInProduction()) {
-            return $this->responseWithErrors('Invoice cancellation is disabled in production. Set VERIFACTU_ENABLE_CANCEL_INVOICE_IN_PRODUCTION=true only when RegistroAnulacion is intentionally required.');
-        }
-
-        if (is_null($timestamp)) {
-            $timestamp = Carbon::now();
-        }
-
-        $keys = ['number', 'date'];
-        if (($key = $this->checkArray($keys, $invoiceData)) !== true) {
-            return $this->responseWithErrors('Invoice cancellation key '.$key.' is missing.');
-        }
-
         $invoice = new InvoiceCancellation(
             issuer: $issuer,
-            invoiceNumber: $invoiceData['number'],
-            invoiceDate: $invoiceData['date'],
+            invoiceNumber: $record->invoice_number,
+            invoiceDate: Carbon::parse($record->invoice_date),
             timestamp: $timestamp,
         );
-
-        $keys = ['number', 'date', 'hash'];
-        if (! $this->checkArray($keys, $previous)) {
-            return $this->responseWithErrors('Previous invoice key is missing.');
-        }
 
         $invoice->setPreviousInvoice(
             number: $previous['number'],
@@ -560,6 +563,28 @@ class Verifactu
             }
         }
 
+        return $this->submitCancellationInvoice($issuer, $invoice);
+    }
+
+    /**
+     * Cancel an invoice using the local registry record id as the source of invoice and issuer data.
+     *
+     * @throws CertificateException
+     */
+    public function cancelInvoiceByRecordId(
+        VerifactuRecord|int $recordId,
+        ?Generator $generator = null,
+        ?Carbon $timestamp = null,
+        array $options = [],
+    ): ResponseAeat {
+        return $this->cancelInvoice($recordId, $generator, $timestamp, $options);
+    }
+
+    /**
+     * @throws CertificateException
+     */
+    private function submitCancellationInvoice(LegalPerson $issuer, InvoiceCancellation $invoice): ResponseAeat
+    {
         $cancellation = new CancelInvoice($this->settings);
 
         try {
@@ -608,7 +633,7 @@ class Verifactu
 
             return $this->storeGeneratedRecord(
                 invoice: $invoice,
-                recordType: 'anulacion',
+                recordType: VerifactuRecordType::ANULACION,
                 requestXml: $registroXml,
                 signedXml: $signedXml,
                 signedAt: $signedAt,
@@ -699,7 +724,7 @@ class Verifactu
         $response->hash = $invoice->hash();
         $response->csv = $soapResponse->CSV ?? null;
         $response->json = json_encode($soapResponse, JSON_FORCE_OBJECT | JSON_PRETTY_PRINT);
-        $response->timestamp = $timestamp;
+        $response->timestamp = $invoice->timestamp;
 
         if (! isset($soapResponse->EstadoEnvio)) {
             $response->errors[] = 'EstadoEnvio has not been received.';
@@ -740,7 +765,7 @@ class Verifactu
 
         return $this->storeGeneratedRecord(
             invoice: $invoice,
-            recordType: 'anulacion',
+            recordType: VerifactuRecordType::ANULACION,
             requestXml: $registroXml,
             signedXml: $signedXml,
             signedAt: $signedAt,
@@ -796,7 +821,7 @@ class Verifactu
 
     private function storeGeneratedRecord(
         Invoice $invoice,
-        string $recordType,
+        VerifactuRecordType $recordType,
         string $requestXml,
         ?string $signedXml = null,
         ?Carbon $signedAt = null,
@@ -813,14 +838,14 @@ class Verifactu
         $registryScope = $this->settings->getRegistryScope();
         $signatureMetadata = $signedXml === null ? [] : $this->signatureMetadata();
         $previousRecordId = $previousHash
-            ? DB::table('verifactu_records')
+            ? VerifactuRecord::query()
                 ->where('registry_scope', $registryScope)
                 ->where('issuer_nif', $invoice->issuer->id)
                 ->where('hash', $previousHash)
                 ->value('id')
             : null;
 
-        $recordId = DB::table('verifactu_records')->insertGetId([
+        $record = VerifactuRecord::create([
             'recordable_type' => null,
             'recordable_id' => null,
             'previous_record_id' => $previousRecordId,
@@ -829,7 +854,7 @@ class Verifactu
             'issuer_name' => $invoice->issuer->name,
             'invoice_number' => $invoice->invoiceNumber,
             'invoice_date' => $invoice->invoiceDate->format('Y-m-d'),
-            'record_type' => $recordType,
+            'record_type' => $recordType->value,
             'invoice_type' => $invoiceType,
             'status' => $this->storedRecordStatus($signedXml, $aeatResponse),
             'estado_envio' => $this->estadoEnvioFromResponse($aeatResponse),
@@ -838,6 +863,7 @@ class Verifactu
             'previous_hash' => $previousHash,
             'request_xml' => $requestXml,
             'signed_xml' => $signedXml,
+            'invoice_payload' => $this->invoicePayload($invoice),
             'signed_at' => $signedAt,
             'signature_format' => $signatureMetadata['signature_format'] ?? null,
             'signature_algorithm' => $signatureMetadata['signature_algorithm'] ?? null,
@@ -850,7 +876,7 @@ class Verifactu
             'certificate_serial_number' => $signatureMetadata['certificate_serial_number'] ?? null,
             'certificate_digest' => $signatureMetadata['certificate_digest'] ?? null,
             'certificate_digest_algorithm' => $signatureMetadata['certificate_digest_algorithm'] ?? null,
-            'response_json' => $aeatResponse?->json ?: null,
+            'response_json' => $this->responseJsonFromResponse($aeatResponse),
             'raw_response' => $aeatResponse?->rawResponse,
             'csv' => $aeatResponse?->csv,
             'qr_url' => $qrUri,
@@ -858,12 +884,12 @@ class Verifactu
             'aeat_error_description' => $this->aeatErrorDescription($aeatResponse),
             'sent_at' => $aeatResponse === null ? null : Carbon::now(),
             'accepted_at' => $aeatResponse?->success ? $aeatResponse->timestamp : null,
-            'created_at' => Carbon::now(),
-            'updated_at' => Carbon::now(),
         ]);
 
+        $recordId = (int) $record->getKey();
+
         if ($aeatResponse !== null) {
-            $aeatResponse->registryRecordId = (int) $recordId;
+            $aeatResponse->registryRecordId = $recordId;
             $aeatResponse->signedRequest = $signedXml;
 
             return $aeatResponse;
@@ -872,7 +898,7 @@ class Verifactu
         $response = new ResponseAeat;
         $response->success = true;
         $response->storedOnly = true;
-        $response->registryRecordId = (int) $recordId;
+        $response->registryRecordId = $recordId;
         $response->hash = $hash;
         $response->request = $requestXml;
         $response->signedRequest = $signedXml;
@@ -980,13 +1006,250 @@ class Verifactu
         return implode(PHP_EOL, $response->errors);
     }
 
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function invoicePayload(Invoice $invoice): ?array
+    {
+        if (! $invoice instanceof InvoiceSubmission) {
+            return null;
+        }
+
+        $recipient = null;
+
+        try {
+            $invoiceRecipient = $invoice->getRecipient();
+            $recipient = [
+                'name' => $invoiceRecipient->name,
+                'id' => $invoiceRecipient->id,
+                'country_code' => $invoiceRecipient->countryCode,
+                'id_type' => $invoiceRecipient->idType->value,
+            ];
+        } catch (RecipientException) {
+            // Simplified invoices do not carry recipient data.
+        }
+
+        return [
+            'issuer' => [
+                'name' => $invoice->issuer->name,
+                'nif' => $invoice->issuer->id,
+            ],
+            'recipient' => $recipient,
+            'invoice' => [
+                'number' => $invoice->invoiceNumber,
+                'date' => $invoice->invoiceDate->format('Y-m-d'),
+                'type' => $invoice->type->value,
+                'description' => $invoice->description,
+                'taxable_base' => (float) $invoice->getTaxableBase(),
+                'tax_amount' => (float) $invoice->getTaxAmount(),
+                'total_amount' => (float) $invoice->getTotalAmount(),
+                'tax_rate' => (float) $invoice->getTaxRate(),
+            ],
+            'tax' => [
+                'operation_qualification' => isset($invoice->exemptOperation) ? null : $this->invoicePayloadOperationQualification($invoice),
+                'exempt_operation' => $invoice->exemptOperation?->value,
+            ],
+        ];
+    }
+
+    private function invoicePayloadOperationQualification(InvoiceSubmission $invoice): ?string
+    {
+        try {
+            return $invoice->getOperationQualification();
+        } catch (InvoiceValidationException) {
+            return null;
+        }
+    }
+
+    /**
+     * @return array{invoiceData: array<string, mixed>, options: array<string, mixed>, operationQualificationType: OperationQualificationType, recipient: ?Recipient}|ResponseAeat
+     */
+    private function buildRectificationInvoiceFromRecord(
+        VerifactuRecord $rectifiedRecord,
+        ?array $invoiceData,
+        ?OperationQualificationType $operationQualificationType,
+        ?Recipient $recipient,
+        ?Carbon $timestamp,
+    ): array|ResponseAeat {
+        if ($rectifiedRecord->invoice_payload === null) {
+            return $this->responseWithErrors('Rectified registry record does not contain invoice_payload.');
+        }
+
+        return $this->buildRectificationInvoiceFromPayload(
+            rectifiedRecord: $rectifiedRecord,
+            invoiceData: $invoiceData,
+            operationQualificationType: $operationQualificationType,
+            recipient: $recipient,
+            timestamp: $timestamp,
+        );
+    }
+
+    /**
+     * @return array{invoiceData: array<string, mixed>, options: array<string, mixed>, operationQualificationType: OperationQualificationType, recipient: ?Recipient}|ResponseAeat
+     */
+    private function buildRectificationInvoiceFromPayload(
+        VerifactuRecord $rectifiedRecord,
+        ?array $invoiceData,
+        ?OperationQualificationType $operationQualificationType,
+        ?Recipient $recipient,
+        ?Carbon $timestamp,
+    ): array|ResponseAeat {
+        $payload = $rectifiedRecord->invoice_payload ?? [];
+        $invoicePayload = $payload['invoice'] ?? [];
+        $taxPayload = $payload['tax'] ?? [];
+
+        if (! is_array($invoicePayload) || ! is_array($taxPayload)) {
+            return $this->responseWithErrors('Rectified registry record invoice_payload is invalid.');
+        }
+
+        $base = $this->negativePayloadAmount($invoicePayload['taxable_base'] ?? null);
+        $tax = $this->negativePayloadAmount($invoicePayload['tax_amount'] ?? null) ?? 0.0;
+        $total = $this->negativePayloadAmount($invoicePayload['total_amount'] ?? null);
+
+        if ($base === null || $total === null) {
+            return $this->responseWithErrors('Rectified registry record invoice_payload does not contain invoice amounts.');
+        }
+
+        $sourceInvoiceType = InvoiceType::tryFrom((string) ($invoicePayload['type'] ?? ''))
+            ?? $rectifiedRecord->invoice_type;
+        $defaultInvoiceType = $sourceInvoiceType === InvoiceType::SIMPLIFIED
+            ? InvoiceType::RECTIFICATION_SIMPLIFIED
+            : InvoiceType::RECTIFICATION_4;
+
+        $data = array_merge([
+            'date' => $timestamp ?? Carbon::now(),
+            'description' => 'Rectification of invoice '.$rectifiedRecord->invoice_number,
+            'type' => $defaultInvoiceType,
+            'amount' => $total,
+            'base' => $base,
+            'vat' => $tax,
+            'rate' => $this->payloadAmount($invoicePayload['tax_rate'] ?? null) ?? 0.0,
+        ], $invoiceData ?? []);
+
+        $validated = $this->validateRectificationInvoiceData($data);
+
+        if ($validated instanceof ResponseAeat) {
+            return $validated;
+        }
+
+        $options = [];
+        $exemptOperation = is_string($taxPayload['exempt_operation'] ?? null) ? $taxPayload['exempt_operation'] : null;
+
+        if ($exemptOperation !== null && ExemptOperationType::tryFrom($exemptOperation) !== null) {
+            $options['exempt_operation'] = $exemptOperation;
+        }
+
+        $qualification = $operationQualificationType
+            ?? OperationQualificationType::tryFrom(is_string($taxPayload['operation_qualification'] ?? null) ? $taxPayload['operation_qualification'] : '')
+            ?? OperationQualificationType::SUBJECT_DIRECT;
+
+        if ($recipient === null && $this->invoiceTypeFromData($data) !== InvoiceType::RECTIFICATION_SIMPLIFIED) {
+            $recipient = $this->recipientFromPayload($payload);
+
+            if ($recipient instanceof ResponseAeat) {
+                return $recipient;
+            }
+        }
+
+        return [
+            'invoiceData' => $data,
+            'options' => $options,
+            'operationQualificationType' => $qualification,
+            'recipient' => $recipient,
+        ];
+    }
+
+    private function recipientFromPayload(array $payload): Recipient|ResponseAeat|null
+    {
+        $recipient = $payload['recipient'] ?? null;
+
+        if ($recipient === null) {
+            return null;
+        }
+
+        if (! is_array($recipient)) {
+            return $this->responseWithErrors('Recipient data in invoice_payload is invalid.');
+        }
+
+        $idType = IdType::tryFrom(is_string($recipient['id_type'] ?? null) ? $recipient['id_type'] : '');
+        $name = is_string($recipient['name'] ?? null) ? $recipient['name'] : null;
+        $id = is_string($recipient['id'] ?? null) ? $recipient['id'] : null;
+        $countryCode = is_string($recipient['country_code'] ?? null) ? $recipient['country_code'] : null;
+
+        if ($idType === null || $name === null || $id === null || $countryCode === null) {
+            return $this->responseWithErrors('Recipient data could not be derived from invoice_payload. Pass recipient explicitly.');
+        }
+
+        try {
+            return new Recipient($name, $id, $countryCode, $idType);
+        } catch (RecipientException $e) {
+            return $this->responseWithErrors('Recipient cannot be derived from invoice_payload: '.$e->getMessage());
+        }
+    }
+
+    private function validateRectificationInvoiceData(array $data): ?ResponseAeat
+    {
+        if (! isset($data['number']) || trim((string) $data['number']) === '') {
+            return $this->responseWithErrors('Rectification invoice number is required in invoiceData["number"].');
+        }
+
+        if (! $this->isRectificationInvoiceType($data['type'] ?? null)) {
+            return $this->responseWithErrors('Rectification invoice type must be one of R1, R2, R3, R4 or R5.');
+        }
+
+        return null;
+    }
+
+    private function invoiceTypeFromData(array $data): ?InvoiceType
+    {
+        $type = $data['type'] ?? null;
+
+        return $type instanceof InvoiceType ? $type : (is_string($type) ? InvoiceType::tryFrom($type) : null);
+    }
+
+    private function negativePayloadAmount(mixed $value): ?float
+    {
+        $amount = $this->payloadAmount($value);
+
+        return $amount === null ? null : -abs($amount);
+    }
+
+    private function payloadAmount(mixed $value): ?float
+    {
+        if (is_int($value) || is_float($value)) {
+            return (float) $value;
+        }
+
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $normalized = str_replace(',', '.', $value);
+
+        return is_numeric($normalized) ? (float) $normalized : null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function responseJsonFromResponse(?ResponseAeat $response): ?array
+    {
+        if ($response === null || $response->json === null || $response->json === '') {
+            return null;
+        }
+
+        $decoded = json_decode($response->json, true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
     private function previousPayloadFromLatestRegistryRecord(LegalPerson $issuer): array|ResponseAeat
     {
         if (! Schema::hasTable('verifactu_records')) {
             return $this->responseWithErrors('VERIFACTU local registry requires the verifactu_records table. Run the package migrations before using registry-backed invoice operations.');
         }
 
-        $record = $this->previousRegistryRecord(issuerNif: $issuer->id, registryScope: $this->settings->getRegistryScope());
+        $record = VerifactuRecord::previousForChain($issuer->id, $this->settings->getRegistryScope());
 
         if ($record === null) {
             return $this->responseWithErrors('Previous registry record was not found in verifactu_records.');
@@ -994,66 +1257,75 @@ class Verifactu
 
         return [
             'number' => $record->invoice_number,
-            'date' => Carbon::parse($record->invoice_date),
+            'date' => $record->invoice_date,
             'hash' => $record->hash,
         ];
     }
 
-    private function findRegistryRecordById(LegalPerson $issuer, int $recordId): \stdClass|ResponseAeat|null
+    private function findRegistryRecordById(?LegalPerson $issuer, VerifactuRecord|int $record): VerifactuRecord|ResponseAeat|null
     {
         if (! Schema::hasTable('verifactu_records')) {
             return $this->responseWithErrors('VERIFACTU local registry requires the verifactu_records table. Run the package migrations before using registry-backed invoice operations.');
         }
 
-        return DB::table('verifactu_records')
-            ->where('id', $recordId)
-            ->where('registry_scope', $this->settings->getRegistryScope())
-            ->where('issuer_nif', $issuer->id)
-            ->where('record_type', 'alta')
-            ->first();
-    }
+        $recordId = $this->recordKey($record);
 
-    private function previousRegistryRecord(?int $recordId = null, ?string $issuerNif = null, ?string $registryScope = null): ?\stdClass
-    {
-        if (! Schema::hasTable('verifactu_records')) {
+        if ($recordId === null) {
             return null;
         }
 
-        if ($recordId !== null) {
-            $sourceRecord = DB::table('verifactu_records')
-                ->where('id', $recordId)
-                ->first(['issuer_nif', 'registry_scope']);
+        $query = VerifactuRecord::query()
+            ->whereKey($recordId)
+            ->where('registry_scope', $this->settings->getRegistryScope())
+            ->where('record_type', VerifactuRecordType::ALTA->value);
 
-            if ($sourceRecord === null) {
+        if ($issuer !== null) {
+            $query->where('issuer_nif', $issuer->id);
+        }
+
+        return $query->first();
+    }
+
+    private function resolveRegistryRecord(VerifactuRecord|int $record): ?VerifactuRecord
+    {
+        if ($record instanceof VerifactuRecord) {
+            if (! $record->exists) {
                 return null;
             }
 
-            $issuerNif = (string) $sourceRecord->issuer_nif;
-            $registryScope = $sourceRecord->registry_scope === null ? null : (string) $sourceRecord->registry_scope;
+            return $record;
         }
 
-        if ($issuerNif === null || trim($issuerNif) === '') {
-            return null;
-        }
-
-        return DB::table('verifactu_records')
-            ->where('registry_scope', $registryScope)
-            ->where('issuer_nif', $issuerNif)
-            ->whereNotNull('hash')
-            ->orderByDesc('id')
-            ->first();
+        return VerifactuRecord::query()->whereKey($record)->first();
     }
 
-    private function findRegistryRecordByIdForCurrentScope(int $recordId): \stdClass|ResponseAeat|null
+    private function recordKey(VerifactuRecord|int $record): ?int
+    {
+        if (is_int($record)) {
+            return $record;
+        }
+
+        $key = $record->getKey();
+
+        return is_numeric($key) ? (int) $key : null;
+    }
+
+    private function findRegistryRecordByIdForCurrentScope(VerifactuRecord|int $record): VerifactuRecord|ResponseAeat|null
     {
         if (! Schema::hasTable('verifactu_records')) {
             return $this->responseWithErrors('VERIFACTU local registry requires the verifactu_records table. Run the package migrations before using registry-backed invoice operations.');
         }
 
-        return DB::table('verifactu_records')
-            ->where('id', $recordId)
+        $recordId = $this->recordKey($record);
+
+        if ($recordId === null) {
+            return null;
+        }
+
+        return VerifactuRecord::query()
+            ->whereKey($recordId)
             ->where('registry_scope', $this->settings->getRegistryScope())
-            ->where('record_type', 'alta')
+            ->where('record_type', VerifactuRecordType::ALTA->value)
             ->first();
     }
 

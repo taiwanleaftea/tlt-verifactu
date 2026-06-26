@@ -5,6 +5,8 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
+use Taiwanleaftea\TltVerifactu\Enums\VerifactuRecordType;
 
 return new class extends Migration
 {
@@ -23,8 +25,11 @@ return new class extends Migration
             $table->string('issuer_name', 120)->nullable();
             $table->string('invoice_number', 60)->index();
             $table->date('invoice_date');
-            $table->string('record_type', 20)->index();
-            $table->string('invoice_type', 10)->nullable();
+            $table->enum('record_type', VerifactuRecordType::values())->index();
+            $table->enum('invoice_type', array_map(
+                static fn (InvoiceType $type): string => $type->value,
+                InvoiceType::cases()
+            ))->nullable();
             $table->string('status', 40)->nullable()->index();
             $table->string('estado_envio', 40)->nullable();
             $table->string('estado_registro', 40)->nullable();
@@ -32,6 +37,7 @@ return new class extends Migration
             $table->string('previous_hash', 64)->nullable();
             $table->longText('request_xml')->nullable();
             $table->longText('signed_xml')->nullable();
+            $table->json('invoice_payload')->nullable();
             $table->timestamp('signed_at')->nullable();
             $table->string('signature_format', 30)->nullable();
             $table->string('signature_algorithm', 80)->nullable();

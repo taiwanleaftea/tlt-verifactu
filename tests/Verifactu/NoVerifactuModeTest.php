@@ -19,6 +19,8 @@ use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
 use Taiwanleaftea\TltVerifactu\Enums\PreviousRecordStatus;
 use Taiwanleaftea\TltVerifactu\Enums\VerifactuMode;
+use Taiwanleaftea\TltVerifactu\Enums\VerifactuRecordType;
+use Taiwanleaftea\TltVerifactu\Models\VerifactuRecord;
 use Taiwanleaftea\TltVerifactu\Services\XadesEpesSigner;
 use Taiwanleaftea\TltVerifactu\Support\Verifactu;
 
@@ -98,6 +100,12 @@ class NoVerifactuModeTest extends TestCase
         $this->assertSame(XadesEpesSigner::POLICY_URL, $record->signature_policy_url);
         $this->assertSame(XadesEpesSigner::POLICY_HASH, $record->signature_policy_hash);
         $this->assertSame(XadesEpesSigner::POLICY_HASH_ALGORITHM, $record->signature_policy_hash_algorithm);
+        $invoicePayload = json_decode($record->invoice_payload, true);
+        $this->assertSame('Buyer Name', $invoicePayload['recipient']['name']);
+        $this->assertEquals(100.0, $invoicePayload['invoice']['taxable_base']);
+        $this->assertEquals(21.0, $invoicePayload['invoice']['tax_amount']);
+        $this->assertEquals(121.0, $invoicePayload['invoice']['total_amount']);
+        $this->assertSame(OperationQualificationType::SUBJECT_DIRECT->value, $invoicePayload['tax']['operation_qualification']);
         $this->assertNotEmpty($record->certificate_subject);
         $this->assertNotEmpty($record->certificate_issuer);
         $this->assertNotEmpty($record->certificate_serial_number);
@@ -166,16 +174,14 @@ class NoVerifactuModeTest extends TestCase
     public function test_cancel_invoice_stores_signed_record_in_sandbox(): void
     {
         $previousHash = str_repeat('A', 64);
-        $this->insertRegistryRecord('A-1', $previousHash);
+        $recordId = $this->insertRegistryRecord('A-1', $previousHash);
 
         $response = $this->configuredVerifactu()->cancelInvoice(
-            issuer: new LegalPerson('Issuer Name', '89890001K'),
-            invoiceData: $this->cancellationData('A-1'),
-            previous: $this->previousPayload('A-1', $previousHash),
+            record: VerifactuRecord::findOrFail($recordId),
             timestamp: Carbon::parse('2026-01-02T10:00:00+01:00'),
         );
 
-        $record = DB::table('verifactu_records')->where('record_type', 'anulacion')->first();
+        $record = DB::table('verifactu_records')->where('record_type', VerifactuRecordType::ANULACION->value)->first();
 
         $this->assertTrue($response->success);
         $this->assertSame('signed', $record->status);
@@ -187,12 +193,10 @@ class NoVerifactuModeTest extends TestCase
     public function test_cancel_invoice_can_include_sin_registro_previo_and_rechazo_previo(): void
     {
         $previousHash = str_repeat('A', 64);
-        $this->insertRegistryRecord('A-1', $previousHash);
+        $recordId = $this->insertRegistryRecord('A-1', $previousHash);
 
         $response = $this->configuredVerifactu()->cancelInvoice(
-            issuer: new LegalPerson('Issuer Name', '89890001K'),
-            invoiceData: $this->cancellationData('A-1'),
-            previous: $this->previousPayload('A-1', $previousHash),
+            record: $recordId,
             timestamp: Carbon::parse('2026-01-02T10:00:00+01:00'),
             options: [
                 'sin_registro_previo' => PreviousRecordStatus::YES,
@@ -200,7 +204,7 @@ class NoVerifactuModeTest extends TestCase
             ],
         );
 
-        $record = DB::table('verifactu_records')->where('record_type', 'anulacion')->first();
+        $record = DB::table('verifactu_records')->where('record_type', VerifactuRecordType::ANULACION->value)->first();
 
         $this->assertTrue($response->success);
         $this->assertStringContainsString('<sf:SinRegistroPrevio>S</sf:SinRegistroPrevio>', $record->request_xml);
@@ -211,12 +215,8 @@ class NoVerifactuModeTest extends TestCase
     {
         config()->set('tlt-verifactu.production', true);
 
-        $previousHash = str_repeat('A', 64);
-
         $response = $this->configuredVerifactu()->cancelInvoice(
-            issuer: new LegalPerson('Issuer Name', '89890001K'),
-            invoiceData: $this->cancellationData('A-1'),
-            previous: $this->previousPayload('A-1', $previousHash),
+            record: 1,
             timestamp: Carbon::parse('2026-01-02T10:00:00+01:00'),
         );
 
@@ -231,16 +231,14 @@ class NoVerifactuModeTest extends TestCase
         config()->set('tlt-verifactu.enable_cancel_invoice_in_production', true);
 
         $previousHash = str_repeat('A', 64);
-        $this->insertRegistryRecord('A-1', $previousHash);
+        $recordId = $this->insertRegistryRecord('A-1', $previousHash);
 
         $response = $this->configuredVerifactu()->cancelInvoice(
-            issuer: new LegalPerson('Issuer Name', '89890001K'),
-            invoiceData: $this->cancellationData('A-1'),
-            previous: $this->previousPayload('A-1', $previousHash),
+            record: $recordId,
             timestamp: Carbon::parse('2026-01-02T10:00:00+01:00'),
         );
 
-        $record = DB::table('verifactu_records')->where('record_type', 'anulacion')->first();
+        $record = DB::table('verifactu_records')->where('record_type', VerifactuRecordType::ANULACION->value)->first();
 
         $this->assertTrue($response->success);
         $this->assertSame('signed', $record->status);
@@ -254,11 +252,11 @@ class NoVerifactuModeTest extends TestCase
         $secondRecordId = $this->insertRegistryRecord('A-2', $secondHash);
 
         $response = $this->configuredVerifactu()->cancelInvoiceByRecordId(
-            recordId: $firstRecordId,
+            recordId: VerifactuRecord::findOrFail($firstRecordId),
             timestamp: Carbon::parse('2026-01-02T10:00:00+01:00'),
         );
 
-        $record = DB::table('verifactu_records')->where('record_type', 'anulacion')->first();
+        $record = DB::table('verifactu_records')->where('record_type', VerifactuRecordType::ANULACION->value)->first();
 
         $this->assertTrue($response->success);
         $this->assertSame($secondHash, $record->previous_hash);
@@ -281,7 +279,7 @@ class NoVerifactuModeTest extends TestCase
             timestamp: Carbon::parse('2026-01-02T10:00:00+01:00'),
         );
 
-        $record = DB::table('verifactu_records')->where('record_type', 'anulacion')->first();
+        $record = DB::table('verifactu_records')->where('record_type', VerifactuRecordType::ANULACION->value)->first();
 
         $this->assertTrue($response->success);
         $this->assertSame($issuerHash, $record->previous_hash);
@@ -303,7 +301,7 @@ class NoVerifactuModeTest extends TestCase
             timestamp: Carbon::parse('2026-01-02T10:00:00+01:00'),
         );
 
-        $record = DB::table('verifactu_records')->where('record_type', 'anulacion')->first();
+        $record = DB::table('verifactu_records')->where('record_type', VerifactuRecordType::ANULACION->value)->first();
 
         $this->assertTrue($response->success);
         $this->assertSame($mainHash, $record->previous_hash);
@@ -324,9 +322,14 @@ class NoVerifactuModeTest extends TestCase
         $secondaryLatestRecordId = $this->insertRegistryRecord('S-2', $secondaryLatestHash, registryScope: 'secondary');
 
         $verifactu = new Verifactu;
+        $sourceRecord = VerifactuRecord::findOrFail($secondaryFirstRecordId);
 
         $this->assertSame($secondaryLatestRecordId, $verifactu->getPreviousId(recordId: $secondaryFirstRecordId));
+        $this->assertSame($secondaryLatestRecordId, $verifactu->getPreviousRecordId(recordId: $sourceRecord));
         $this->assertSame($secondaryLatestHash, $verifactu->getPreviousHash(recordId: $secondaryFirstRecordId));
+        $this->assertSame($secondaryLatestHash, $sourceRecord->getPreviousHash());
+        $this->assertSame($secondaryLatestRecordId, $sourceRecord->getPreviousRecordId());
+        $this->assertSame($secondaryLatestRecordId, $sourceRecord->getPreviousRecord()?->id);
     }
 
     public function test_previous_helpers_can_resolve_chain_from_issuer_and_scope(): void
@@ -341,6 +344,7 @@ class NoVerifactuModeTest extends TestCase
         $verifactu = new Verifactu;
 
         $this->assertSame($mainRecordId, $verifactu->getPreviousId(issuerNif: '89890001K', registryScope: 'main'));
+        $this->assertSame($mainRecordId, $verifactu->getPreviousRecord(issuerNif: '89890001K', registryScope: 'main')?->id);
         $this->assertSame($mainHash, $verifactu->getPreviousHash(issuerNif: '89890001K', registryScope: 'main'));
     }
 
@@ -357,7 +361,7 @@ class NoVerifactuModeTest extends TestCase
 
         $this->assertFalse($response->success);
         $this->assertSame(['Invoice cancellation is disabled in production. Set VERIFACTU_ENABLE_CANCEL_INVOICE_IN_PRODUCTION=true only when RegistroAnulacion is intentionally required.'], $response->errors);
-        $this->assertNull(DB::table('verifactu_records')->where('record_type', 'anulacion')->first());
+        $this->assertNull(DB::table('verifactu_records')->where('record_type', VerifactuRecordType::ANULACION->value)->first());
     }
 
     public function test_it_stores_chained_invoice_records(): void
@@ -406,7 +410,12 @@ class NoVerifactuModeTest extends TestCase
         $records = DB::table('verifactu_records')->orderBy('id')->get();
 
         $this->assertCount(4, $records);
-        $this->assertSame(['alta', 'alta', 'alta', 'alta'], $records->pluck('record_type')->all());
+        $this->assertSame([
+            VerifactuRecordType::ALTA->value,
+            VerifactuRecordType::ALTA->value,
+            VerifactuRecordType::ALTA->value,
+            VerifactuRecordType::ALTA->value,
+        ], $records->pluck('record_type')->all());
         $this->assertSame(['A-1', 'A-2', 'A-3', 'A-4'], $records->pluck('invoice_number')->all());
         $this->assertNull($records[0]->previous_record_id);
         $this->assertSame($records[0]->id, $records[1]->previous_record_id);
@@ -444,7 +453,7 @@ class NoVerifactuModeTest extends TestCase
 
         $response = $verifactu->subsanateInvoice(
             issuer: $issuer,
-            recordId: $first->registryRecordId,
+            recordId: VerifactuRecord::findOrFail($first->registryRecordId),
             invoiceData: $this->invoiceData('A-1'),
             operationQualificationType: OperationQualificationType::SUBJECT_DIRECT,
             recipient: $recipient,
@@ -484,11 +493,8 @@ class NoVerifactuModeTest extends TestCase
         );
 
         $response = $verifactu->submitRectificationInvoice(
-            issuer: $issuer,
-            invoiceData: $this->invoiceData('R-1', InvoiceType::RECTIFICATION_4),
-            rectifiedRecordId: $first->registryRecordId,
-            operationQualificationType: OperationQualificationType::SUBJECT_DIRECT,
-            recipient: $recipient,
+            rectifiedRecordId: VerifactuRecord::findOrFail($first->registryRecordId),
+            invoiceData: ['number' => 'R-1'],
             timestamp: Carbon::parse('2026-01-01T10:02:00+01:00'),
         );
 
@@ -502,6 +508,9 @@ class NoVerifactuModeTest extends TestCase
         $this->assertStringContainsString('<sf:TipoRectificativa>I</sf:TipoRectificativa>', $record->request_xml);
         $this->assertStringContainsString('<sf:IDFacturaRectificada>', $record->request_xml);
         $this->assertStringContainsString('<sf:NumSerieFactura>A-1</sf:NumSerieFactura>', $record->request_xml);
+        $this->assertStringContainsString('<sf:BaseImponibleOimporteNoSujeto>-100.00</sf:BaseImponibleOimporteNoSujeto>', $record->request_xml);
+        $this->assertStringContainsString('<sf:CuotaRepercutida>-21.00</sf:CuotaRepercutida>', $record->request_xml);
+        $this->assertStringContainsString('<sf:ImporteTotal>-121.00</sf:ImporteTotal>', $record->request_xml);
         $this->assertStringContainsString('<sf:Huella>'.$second->hash.'</sf:Huella>', $record->request_xml);
     }
 
@@ -531,14 +540,6 @@ class NoVerifactuModeTest extends TestCase
         ];
     }
 
-    private function cancellationData(string $number): array
-    {
-        return [
-            'number' => $number,
-            'date' => Carbon::createFromFormat('d-m-Y', '01-01-2026'),
-        ];
-    }
-
     private function insertRegistryRecord(
         string $number,
         string $hash,
@@ -552,7 +553,7 @@ class NoVerifactuModeTest extends TestCase
             'issuer_name' => $issuerName,
             'invoice_number' => $number,
             'invoice_date' => '2026-01-01',
-            'record_type' => 'alta',
+            'record_type' => VerifactuRecordType::ALTA->value,
             'status' => 'signed',
             'hash' => $hash,
             'created_at' => Carbon::now(),
