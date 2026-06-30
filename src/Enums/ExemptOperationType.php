@@ -9,6 +9,8 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
  */
 enum ExemptOperationType: string
 {
+    use EnumValues;
+
     // Exenta por el artículo 20
     case E1 = 'E1';
 

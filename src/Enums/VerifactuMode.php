@@ -8,6 +8,8 @@ use InvalidArgumentException;
 
 enum VerifactuMode: string
 {
+    use EnumValues;
+
     case ONLINE = 'online';
     case NO_VERIFACTU = 'no_verifactu';
 

@@ -9,6 +9,8 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
  */
 enum PreviousRecordStatus: string
 {
+    use EnumValues;
+
     case YES = 'S';
 
     case NO = 'N';

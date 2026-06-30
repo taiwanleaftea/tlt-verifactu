@@ -23,6 +23,13 @@ class AEAT
     public const string QR_VERIFICATION_SANDBOX = 'https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR?';
 
     /*
+     * QR Verification service NO VERIFACTU mode
+     */
+    public const string QR_NO_VERIFACTU_SANDBOX = 'https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQRNoVerifactu?';
+
+    public const string QR_NO_VERIFACTU_PRODUCTION = 'https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQRNoVerifactu?';
+
+    /*
      * XSD namespaces
      */
     // SuministroInformacion.xsd namespace

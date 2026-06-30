@@ -5,8 +5,10 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Enums\VerifactuRecordType;
+use Taiwanleaftea\TltVerifactu\Enums\VerifactuRecordVariant;
 
 return new class extends Migration
 {
@@ -25,10 +27,12 @@ return new class extends Migration
             $table->string('invoice_number', 60)->index();
             $table->date('invoice_date');
             $table->enum('record_type', VerifactuRecordType::values())->index();
-            $table->enum('invoice_type', array_map(
-                static fn (InvoiceType $type): string => $type->value,
-                InvoiceType::cases()
-            ))->nullable();
+            $table->enum('record_variant', VerifactuRecordVariant::values())->nullable()->index();
+            $table->enum('invoice_type', InvoiceType::values())->nullable();
+            $table->string('recipient_name', 120)->nullable();
+            $table->string('recipient_id', 40)->nullable()->index();
+            $table->string('recipient_country_code', 2)->nullable();
+            $table->enum('recipient_id_type', IdType::values())->nullable();
             $table->string('status', 40)->nullable()->index();
             $table->string('estado_envio', 40)->nullable();
             $table->string('estado_registro', 40)->nullable();

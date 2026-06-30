@@ -15,6 +15,7 @@ use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
 use Taiwanleaftea\TltVerifactu\Enums\RejectionStatus;
+use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
 use Taiwanleaftea\TltVerifactu\Services\SubmitInvoice;
 
 #[CoversClass(InvoiceSubmission::class)]
@@ -90,6 +91,66 @@ class InvoiceSubmissionTest extends TestCase
 
         $this->assertStringContainsString('<sfLR:RegFactuSistemaFacturacion', $dom->saveXML());
         $this->assertStringNotContainsString('<ds:Signature', $dom->saveXML());
+    }
+
+    public function test_standard_invoice_can_include_multiple_breakdown_details()
+    {
+        $settings = new VerifactuSettings;
+
+        $invoice = new InvoiceSubmission(
+            new LegalPerson('Issuer Name', '89890001K'),
+            '12345678/G33',
+            Carbon::createFromFormat('d-m-Y', '01-01-2024'),
+            'Description',
+            InvoiceType::STANDARD,
+            0,
+            0,
+            0,
+            176,
+            Carbon::now(),
+            [
+                ['rate' => 21, 'base' => 100, 'vat' => 21],
+                ['rate' => 10, 'base' => 50, 'vat' => 5],
+            ],
+        );
+
+        $invoice->setRecipient(new Recipient($this->recipientName, $this->recipientId, 'ES', IdType::NIF));
+        $invoice->setOperationQualification(OperationQualificationType::SUBJECT_DIRECT);
+
+        $dom = (new SubmitInvoice($settings))->getXml($invoice);
+        $xml = $dom->saveXML();
+        $validation = $this->validateXml($dom);
+
+        $this->assertTrue($validation['result'], 'XML multiple breakdown validation failed.'.PHP_EOL.$validation['errors']);
+        $this->assertSame(2, substr_count($xml, '<sf:DetalleDesglose>'));
+        $this->assertStringContainsString('<sf:TipoImpositivo>21.00</sf:TipoImpositivo>', $xml);
+        $this->assertStringContainsString('<sf:BaseImponibleOimporteNoSujeto>100.00</sf:BaseImponibleOimporteNoSujeto>', $xml);
+        $this->assertStringContainsString('<sf:CuotaRepercutida>21.00</sf:CuotaRepercutida>', $xml);
+        $this->assertStringContainsString('<sf:TipoImpositivo>10.00</sf:TipoImpositivo>', $xml);
+        $this->assertStringContainsString('<sf:BaseImponibleOimporteNoSujeto>50.00</sf:BaseImponibleOimporteNoSujeto>', $xml);
+        $this->assertStringContainsString('<sf:CuotaRepercutida>5.00</sf:CuotaRepercutida>', $xml);
+        $this->assertStringContainsString('<sf:CuotaTotal>26.00</sf:CuotaTotal>', $xml);
+        $this->assertStringContainsString('<sf:ImporteTotal>176.00</sf:ImporteTotal>', $xml);
+    }
+
+    public function test_invoice_breakdown_rejects_more_than_twelve_details()
+    {
+        $this->expectException(InvoiceValidationException::class);
+        $this->expectExceptionMessage('Invoice breakdown cannot contain more than 12 details.');
+
+        new InvoiceSubmission(
+            new LegalPerson('Issuer Name', '89890001K'),
+            '12345678/G33',
+            Carbon::createFromFormat('d-m-Y', '01-01-2024'),
+            'Description',
+            InvoiceType::STANDARD,
+            0,
+            0,
+            0,
+            176,
+            Carbon::now(),
+            array_fill(0, 13, ['rate' => 21, 'base' => 10, 'vat' => 2.1]),
+        );
     }
 
     public function test_simplified_es_provider()

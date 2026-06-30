@@ -148,6 +148,45 @@ class OnlineRegistryModeTest extends TestCase
         $this->assertSame(AEAT::URL_PRODUCTION, $soapClient->options['location']);
     }
 
+    public function test_submit_invoice_does_not_store_registry_record_when_aeat_rejects_record(): void
+    {
+        $soapClient = new FakeVerifactuSoapClient((object) [
+            'EstadoEnvio' => 'Incorrecto',
+            'RespuestaLinea' => (object) [
+                'EstadoRegistro' => EstadoRegistro::NOT_ACCEPTED->value,
+                'CodigoErrorRegistro' => 1234,
+                'DescripcionErrorRegistro' => 'Rejected by AEAT sandbox',
+            ],
+        ]);
+
+        $response = $this->configuredVerifactu($soapClient)->submitInvoice(
+            issuer: new LegalPerson('Issuer Name', '89890001K'),
+            invoiceData: [
+                'number' => 'A-1',
+                'date' => Carbon::createFromFormat('d-m-Y', '01-01-2026'),
+                'description' => 'Invoice description',
+                'type' => InvoiceType::STANDARD,
+                'amount' => 121,
+                'base' => 100,
+                'vat' => 21,
+                'rate' => 21,
+            ],
+            options: [],
+            operationQualificationType: OperationQualificationType::SUBJECT_DIRECT,
+            recipient: new Recipient('Buyer Name', '12345678L', 'ES', IdType::NIF),
+            timestamp: Carbon::parse('2026-01-01T10:00:00+01:00'),
+        );
+
+        $this->assertFalse($response->success);
+        $this->assertSame(EstadoRegistro::NOT_ACCEPTED, $response->status);
+        $this->assertSame(['Error 1234: Rejected by AEAT sandbox'], $response->errors);
+        $this->assertNull($response->registryRecordId);
+        $this->assertNull($response->registryRecord);
+        $this->assertStringContainsString('<sfLR:RegFactuSistemaFacturacion', (string) $response->request);
+        $this->assertStringContainsString('<ds:Signature', (string) $response->signedRequest);
+        $this->assertSame(0, DB::table('verifactu_records')->count());
+    }
+
     public function test_generate_qr_uri_uses_production_url_when_production_is_enabled(): void
     {
         config()->set('tlt-verifactu.production', true);

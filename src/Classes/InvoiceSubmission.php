@@ -17,6 +17,8 @@ use Taiwanleaftea\TltVerifactu\Exceptions\RecipientException;
 
 class InvoiceSubmission extends Invoice
 {
+    public const int MAX_BREAKDOWN_DETAILS = 12;
+
     public InvoiceType $type;
 
     public string $description;
@@ -39,6 +41,11 @@ class InvoiceSubmission extends Invoice
 
     public ?ExemptOperationType $exemptOperation = null;
 
+    /**
+     * @var array<int, array{rate: float, base: float, vat: float}>
+     */
+    protected array $breakdown = [];
+
     public function __construct(
         LegalPerson $issuer,
         string $invoiceNumber,
@@ -49,7 +56,8 @@ class InvoiceSubmission extends Invoice
         float $taxableBase,
         float $taxAmount,
         float $totalAmount,
-        Carbon $timestamp
+        Carbon $timestamp,
+        ?array $breakdown = null,
     ) {
         $this->issuer = $issuer;
         $this->invoiceNumber = Str::trim($invoiceNumber);
@@ -63,6 +71,13 @@ class InvoiceSubmission extends Invoice
         $this->timestamp = $timestamp;
 
         $this->optionsKeys = ['subsanacion', 'rechazo_previo', 'rectificado', 'exempt_operation'];
+        $this->setBreakdown($breakdown ?? [
+            [
+                'rate' => $taxRate,
+                'base' => $taxableBase,
+                'vat' => $taxAmount,
+            ],
+        ]);
     }
 
     /**
@@ -95,6 +110,67 @@ class InvoiceSubmission extends Invoice
     public function getTaxableBase(): string
     {
         return $this->normalizeDecimal($this->taxableBase);
+    }
+
+    /**
+     * @return array<int, array{rate: string, base: string, vat: string}>
+     */
+    public function getBreakdownDetails(): array
+    {
+        return array_map(fn (array $detail): array => [
+            'rate' => $this->normalizeDecimal($detail['rate']),
+            'base' => $this->normalizeDecimal($detail['base']),
+            'vat' => $this->normalizeDecimal($detail['vat']),
+        ], $this->breakdown);
+    }
+
+    /**
+     * @return array<int, array{rate: float, base: float, vat: float}>
+     */
+    public function getBreakdownPayload(): array
+    {
+        return $this->breakdown;
+    }
+
+    /**
+     * @throws InvoiceValidationException
+     */
+    public function setBreakdown(array $breakdown): void
+    {
+        if ($breakdown === []) {
+            throw new InvoiceValidationException('Invoice breakdown must contain at least one detail.');
+        }
+
+        if (count($breakdown) > self::MAX_BREAKDOWN_DETAILS) {
+            throw new InvoiceValidationException('Invoice breakdown cannot contain more than '.self::MAX_BREAKDOWN_DETAILS.' details.');
+        }
+
+        $normalized = [];
+
+        foreach (array_values($breakdown) as $index => $detail) {
+            if (! is_array($detail)) {
+                throw new InvoiceValidationException('Invoice breakdown detail '.($index + 1).' must be an array.');
+            }
+
+            $rate = $detail['rate'] ?? $detail['tax_rate'] ?? null;
+            $base = $detail['base'] ?? $detail['taxable_base'] ?? null;
+            $vat = $detail['vat'] ?? $detail['tax_amount'] ?? null;
+
+            if (! is_numeric($rate) || ! is_numeric($base) || ! is_numeric($vat)) {
+                throw new InvoiceValidationException('Invoice breakdown detail '.($index + 1).' must contain numeric rate, base and vat values.');
+            }
+
+            $normalized[] = [
+                'rate' => (float) $rate,
+                'base' => (float) $base,
+                'vat' => (float) $vat,
+            ];
+        }
+
+        $this->breakdown = $normalized;
+        $this->taxRate = $normalized[0]['rate'];
+        $this->taxableBase = array_sum(array_column($normalized, 'base'));
+        $this->taxAmount = array_sum(array_column($normalized, 'vat'));
     }
 
     /**

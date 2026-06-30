@@ -9,6 +9,8 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
  */
 enum GeneratorType: string
 {
+    use EnumValues;
+
     /**
      * Expedidor (obligado a Expedir la factura anulada).
      */

@@ -24,9 +24,10 @@ class QRCode
         Carbon $invoiceDate,
         string $number,
         float $totalAmount,
-        bool $isProduction = false
+        bool $isProduction = false,
+        bool $isVerifactu = true
     ): mixed {
-        $url = self::buildUrl($issuerNIF, $invoiceDate, $number, $totalAmount, $isProduction);
+        $url = self::buildUrl($issuerNIF, $invoiceDate, $number, $totalAmount, $isProduction, $isVerifactu);
         $render = self::buildQRRender(QRMarkupSVG::class);
 
         return $render->render($url);
@@ -35,8 +36,6 @@ class QRCode
     /**
      * Render QR code as PNG base64 image
      *
-     *
-     *
      * @throws QRGeneratorException
      */
     public static function PNG(
@@ -44,7 +43,8 @@ class QRCode
         Carbon $invoiceDate,
         string $number,
         float $totalAmount,
-        bool $isProduction = false
+        bool $isProduction = false,
+        bool $isVerifactu = true
     ): mixed {
         if (extension_loaded('gd') && function_exists('gd_info')) {
             $outputInterface = QRGdImagePNG::class;
@@ -54,7 +54,7 @@ class QRCode
             throw new QRGeneratorException('Image library not loaded.');
         }
 
-        $url = self::buildUrl($issuerNIF, $invoiceDate, $number, $totalAmount, $isProduction);
+        $url = self::buildUrl($issuerNIF, $invoiceDate, $number, $totalAmount, $isProduction, $isVerifactu);
         $render = self::buildQRRender($outputInterface, true);
 
         return $render->render($url);
@@ -65,17 +65,24 @@ class QRCode
         Carbon $invoiceDate,
         string $number,
         float $totalAmount,
-        bool $isProduction = false
+        bool $isProduction = false,
+        bool $isVerifactu = true
     ): string {
-        $url = $isProduction ? AEAT::QR_VERIFICATION_PRODUCTION : AEAT::QR_VERIFICATION_SANDBOX;
+        $baseUrl = match (true) {
+            $isProduction && $isVerifactu => AEAT::QR_VERIFICATION_PRODUCTION,
+            ! $isProduction && $isVerifactu => AEAT::QR_VERIFICATION_SANDBOX,
+            $isProduction && ! $isVerifactu => AEAT::QR_NO_VERIFACTU_PRODUCTION,
+            default => AEAT::QR_NO_VERIFACTU_SANDBOX,
+        };
+
         $query = http_build_query([
             'nif' => $issuerNIF,
             'numserie' => $number,
             'fecha' => $invoiceDate->format('d-m-Y'),
             'importe' => number_format($totalAmount, 2, '.', ''),
-        ]);
+        ], '', '&', PHP_QUERY_RFC3986);
 
-        return $url.$query;
+        return $baseUrl.$query;
     }
 
     /**

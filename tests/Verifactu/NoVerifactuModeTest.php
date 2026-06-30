@@ -20,6 +20,7 @@ use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
 use Taiwanleaftea\TltVerifactu\Enums\PreviousRecordStatus;
 use Taiwanleaftea\TltVerifactu\Enums\VerifactuMode;
 use Taiwanleaftea\TltVerifactu\Enums\VerifactuRecordType;
+use Taiwanleaftea\TltVerifactu\Enums\VerifactuRecordVariant;
 use Taiwanleaftea\TltVerifactu\Exceptions\CertificateException;
 use Taiwanleaftea\TltVerifactu\Models\VerifactuRecord;
 use Taiwanleaftea\TltVerifactu\Services\XadesEpesSigner;
@@ -45,6 +46,9 @@ class NoVerifactuModeTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        config()->set('tlt-verifactu.mode', VerifactuMode::NO_VERIFACTU->value);
+        config()->set('tlt-verifactu.allow_representative_certificate', false);
 
         $migration = require __DIR__.'/../../database/migrations/2026_06_25_000000_create_verifactu_records_table.php';
         $migration->up();
@@ -93,6 +97,11 @@ class NoVerifactuModeTest extends TestCase
         $this->assertInstanceOf(VerifactuRecord::class, $response->registryRecord);
         $this->assertSame($response->registryRecordId, $response->registryRecord->id);
         $this->assertSame('signed', $record->status);
+        $this->assertSame(VerifactuRecordVariant::STANDARD->value, $record->record_variant);
+        $this->assertSame('Buyer Name', $record->recipient_name);
+        $this->assertSame('12345678L', $record->recipient_id);
+        $this->assertSame('ES', $record->recipient_country_code);
+        $this->assertSame(IdType::NIF->value, $record->recipient_id_type);
         $this->assertStringContainsString('<sf:RegistroAlta', $record->request_xml);
         $this->assertStringNotContainsString('<ds:Signature', $record->request_xml);
         $this->assertStringContainsString('<ds:Signature', $record->signed_xml);
@@ -115,6 +124,93 @@ class NoVerifactuModeTest extends TestCase
         $this->assertNotEmpty($record->certificate_digest);
         $this->assertSame(XadesEpesSigner::CERTIFICATE_DIGEST_ALGORITHM, $record->certificate_digest_algorithm);
         $this->assertNotNull($record->signed_at);
+    }
+
+    public function test_submit_invoice_accepts_multiple_breakdown_details(): void
+    {
+        $verifactu = $this->configuredVerifactu();
+        $invoiceData = $this->invoiceData('A-BREAKDOWN');
+        unset($invoiceData['base'], $invoiceData['vat'], $invoiceData['rate']);
+        $invoiceData['amount'] = 176;
+        $invoiceData['breakdown'] = [
+            ['rate' => 21, 'base' => 100, 'vat' => 21],
+            ['rate' => 10, 'base' => 50, 'vat' => 5],
+        ];
+
+        $response = $verifactu->submitInvoice(
+            issuer: new LegalPerson('Issuer Name', '89890001K'),
+            invoiceData: $invoiceData,
+            options: [],
+            operationQualificationType: OperationQualificationType::SUBJECT_DIRECT,
+            recipient: new Recipient('Buyer Name', '12345678L', 'ES', IdType::NIF),
+            timestamp: Carbon::parse('2026-01-01T10:00:00+01:00'),
+        );
+
+        $record = DB::table('verifactu_records')->first();
+        $invoicePayload = json_decode($record->invoice_payload, true);
+
+        $this->assertTrue($response->success);
+        $this->assertSame(2, substr_count($record->request_xml, '<sf:DetalleDesglose>'));
+        $this->assertStringContainsString('<sf:TipoImpositivo>21.00</sf:TipoImpositivo>', $record->request_xml);
+        $this->assertStringContainsString('<sf:TipoImpositivo>10.00</sf:TipoImpositivo>', $record->request_xml);
+        $this->assertStringContainsString('<sf:CuotaTotal>26.00</sf:CuotaTotal>', $record->request_xml);
+        $this->assertEquals(150.0, $invoicePayload['invoice']['taxable_base']);
+        $this->assertEquals(26.0, $invoicePayload['invoice']['tax_amount']);
+        $this->assertEquals(176.0, $invoicePayload['invoice']['total_amount']);
+        $this->assertCount(2, $invoicePayload['invoice']['breakdown']);
+        $this->assertEquals(21.0, $invoicePayload['invoice']['breakdown'][0]['rate']);
+        $this->assertEquals(10.0, $invoicePayload['invoice']['breakdown'][1]['rate']);
+    }
+
+    public function test_submit_invoice_rejects_more_than_twelve_breakdown_details(): void
+    {
+        $verifactu = $this->configuredVerifactu();
+        $invoiceData = $this->invoiceData('A-BREAKDOWN-LIMIT');
+        unset($invoiceData['base'], $invoiceData['vat'], $invoiceData['rate']);
+        $invoiceData['breakdown'] = array_fill(0, 13, ['rate' => 21, 'base' => 10, 'vat' => 2.1]);
+
+        $response = $verifactu->submitInvoice(
+            issuer: new LegalPerson('Issuer Name', '89890001K'),
+            invoiceData: $invoiceData,
+            options: [],
+            operationQualificationType: OperationQualificationType::SUBJECT_DIRECT,
+            recipient: new Recipient('Buyer Name', '12345678L', 'ES', IdType::NIF),
+            timestamp: Carbon::parse('2026-01-01T10:00:00+01:00'),
+        );
+
+        $this->assertFalse($response->success);
+        $this->assertSame(['Invoice cannot be validated: Invoice breakdown cannot contain more than 12 details.'], $response->errors);
+        $this->assertSame(0, DB::table('verifactu_records')->count());
+    }
+
+    public function test_submit_simplified_invoice_stores_f2_record_without_recipient(): void
+    {
+        $verifactu = $this->configuredVerifactu();
+        $invoiceData = $this->invoiceData('A-2');
+        unset($invoiceData['type']);
+
+        $response = $verifactu->submitSimplifiedInvoice(
+            issuer: new LegalPerson('Issuer Name', '89890001K'),
+            invoiceData: $invoiceData,
+            timestamp: Carbon::parse('2026-01-01T10:00:00+01:00'),
+        );
+
+        $record = DB::table('verifactu_records')->first();
+        $invoicePayload = json_decode($record->invoice_payload, true);
+
+        $this->assertTrue($response->success);
+        $this->assertNull($response->csv);
+        $this->assertSame(InvoiceType::SIMPLIFIED->value, $record->invoice_type);
+        $this->assertNull($record->recipient_name);
+        $this->assertNull($record->recipient_id);
+        $this->assertNull($record->recipient_country_code);
+        $this->assertNull($record->recipient_id_type);
+        $this->assertStringContainsString('<sf:TipoFactura>F2</sf:TipoFactura>', $record->request_xml);
+        $this->assertStringContainsString('<sf:FacturaSinIdentifDestinatarioArt61d>S</sf:FacturaSinIdentifDestinatarioArt61d>', $record->request_xml);
+        $this->assertStringNotContainsString('<sf:Destinatarios>', $record->request_xml);
+        $this->assertNull($invoicePayload['recipient']);
+        $this->assertSame(InvoiceType::SIMPLIFIED->value, $invoicePayload['invoice']['type']);
+        $this->assertSame(OperationQualificationType::SUBJECT_DIRECT->value, $invoicePayload['tax']['operation_qualification']);
     }
 
     public function test_submit_invoice_returns_error_when_signature_metadata_cannot_be_read(): void
@@ -491,6 +587,7 @@ class NoVerifactuModeTest extends TestCase
         $this->assertTrue($response->success);
         $this->assertSame($second->hash, $record->previous_hash);
         $this->assertSame('A-1', $record->invoice_number);
+        $this->assertSame(VerifactuRecordVariant::SUBSANACION->value, $record->record_variant);
         $this->assertStringContainsString('<sf:Subsanacion>S</sf:Subsanacion>', $record->request_xml);
         $this->assertStringContainsString('<sf:Huella>'.$second->hash.'</sf:Huella>', $record->request_xml);
     }
@@ -529,6 +626,7 @@ class NoVerifactuModeTest extends TestCase
         $this->assertTrue($response->success);
         $this->assertSame($second->hash, $record->previous_hash);
         $this->assertSame('R-1', $record->invoice_number);
+        $this->assertSame(VerifactuRecordVariant::RECTIFICATIVA->value, $record->record_variant);
         $this->assertSame(InvoiceType::RECTIFICATION_4->value, $record->invoice_type);
         $this->assertStringContainsString('<sf:TipoFactura>R4</sf:TipoFactura>', $record->request_xml);
         $this->assertStringContainsString('<sf:TipoRectificativa>I</sf:TipoRectificativa>', $record->request_xml);
@@ -538,6 +636,37 @@ class NoVerifactuModeTest extends TestCase
         $this->assertStringContainsString('<sf:CuotaRepercutida>-21.00</sf:CuotaRepercutida>', $record->request_xml);
         $this->assertStringContainsString('<sf:ImporteTotal>-121.00</sf:ImporteTotal>', $record->request_xml);
         $this->assertStringContainsString('<sf:Huella>'.$second->hash.'</sf:Huella>', $record->request_xml);
+    }
+
+    public function test_submit_rectification_invoice_for_simplified_invoice_does_not_require_recipient(): void
+    {
+        $verifactu = $this->configuredVerifactu();
+        $issuer = new LegalPerson('Issuer Name', '89890001K');
+
+        $source = $verifactu->submitSimplifiedInvoice(
+            issuer: $issuer,
+            invoiceData: $this->invoiceData('S-1', InvoiceType::SIMPLIFIED),
+            options: [],
+            timestamp: Carbon::parse('2026-01-01T10:00:00+01:00'),
+        );
+
+        $response = $verifactu->submitRectificationInvoice(
+            rectifiedRecordId: VerifactuRecord::findOrFail($source->registryRecordId),
+            invoiceData: ['number' => 'RS-1'],
+            timestamp: Carbon::parse('2026-01-01T10:01:00+01:00'),
+        );
+
+        $record = DB::table('verifactu_records')->orderByDesc('id')->first();
+
+        $this->assertTrue($response->success);
+        $this->assertSame($source->hash, $record->previous_hash);
+        $this->assertSame('RS-1', $record->invoice_number);
+        $this->assertSame(VerifactuRecordVariant::RECTIFICATIVA->value, $record->record_variant);
+        $this->assertSame(InvoiceType::RECTIFICATION_SIMPLIFIED->value, $record->invoice_type);
+        $this->assertStringContainsString('<sf:TipoFactura>R5</sf:TipoFactura>', $record->request_xml);
+        $this->assertStringContainsString('<sf:NumSerieFactura>S-1</sf:NumSerieFactura>', $record->request_xml);
+        $this->assertStringNotContainsString('<sf:Destinatarios>', $record->request_xml);
+        $this->assertStringContainsString('<sf:ImporteTotal>-121.00</sf:ImporteTotal>', $record->request_xml);
     }
 
     private function configuredVerifactu(string $certificateNif = '89890001K'): Verifactu

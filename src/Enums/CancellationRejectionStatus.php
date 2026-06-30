@@ -9,6 +9,8 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
  */
 enum CancellationRejectionStatus: string
 {
+    use EnumValues;
+
     case YES = 'S';
 
     case NO = 'N';

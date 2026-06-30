@@ -7,8 +7,10 @@ namespace Taiwanleaftea\TltVerifactu\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Enums\VerifactuRecordType;
+use Taiwanleaftea\TltVerifactu\Enums\VerifactuRecordVariant;
 
 /**
  * @property int $id
@@ -19,7 +21,12 @@ use Taiwanleaftea\TltVerifactu\Enums\VerifactuRecordType;
  * @property string $invoice_number
  * @property Carbon $invoice_date
  * @property VerifactuRecordType $record_type
+ * @property ?VerifactuRecordVariant $record_variant
  * @property ?InvoiceType $invoice_type
+ * @property ?string $recipient_name
+ * @property ?string $recipient_id
+ * @property ?string $recipient_country_code
+ * @property ?IdType $recipient_id_type
  * @property ?string $status
  * @property ?string $hash
  * @property ?string $previous_hash
@@ -37,7 +44,9 @@ class VerifactuRecord extends Model
         return [
             'invoice_date' => 'date',
             'record_type' => VerifactuRecordType::class,
+            'record_variant' => VerifactuRecordVariant::class,
             'invoice_type' => InvoiceType::class,
+            'recipient_id_type' => IdType::class,
             'invoice_payload' => 'array',
             'response_json' => 'array',
             'signed_at' => 'datetime',

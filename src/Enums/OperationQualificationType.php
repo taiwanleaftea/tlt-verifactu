@@ -6,6 +6,8 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
 
 enum OperationQualificationType: string
 {
+    use EnumValues;
+
     // Operación Sujeta y No exenta - Sin inversión del sujeto pasivo.
     // Spanish companies and any private persons, incl. simplified
     case SUBJECT_DIRECT = 'S1';

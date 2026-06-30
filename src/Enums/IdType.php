@@ -9,6 +9,8 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
  */
 enum IdType: string
 {
+    use EnumValues;
+
     /**
      * NIF-IVA
      */

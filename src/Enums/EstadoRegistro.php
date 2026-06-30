@@ -7,6 +7,8 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
  */
 enum EstadoRegistro: string
 {
+    use EnumValues;
+
     case ACCEPTED = 'Correcto';
 
     // Aceptado con Errores. Ver detalle del error

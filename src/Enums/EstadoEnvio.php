@@ -10,6 +10,8 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
  */
 enum EstadoEnvio: string
 {
+    use EnumValues;
+
     case ACCEPTED = 'Correcto';
 
     // Parcialmente correcto. Ver detalle de errores

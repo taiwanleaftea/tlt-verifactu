@@ -10,6 +10,8 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
  */
 enum CreditNoteType: string
 {
+    use EnumValues;
+
     /**
      * Por sustitución
      */

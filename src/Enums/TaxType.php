@@ -9,6 +9,8 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
  */
 enum TaxType: string
 {
+    use EnumValues;
+
     /**
      * Value Added Tax (IVA).
      */

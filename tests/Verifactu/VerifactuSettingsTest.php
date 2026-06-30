@@ -51,6 +51,17 @@ class VerifactuSettingsTest extends TestCase
         $this->assertFalse($settings->sendsRecordsOnline());
         $this->assertTrue($settings->storesRecordsOnly());
         $this->assertTrue($settings->signsStoredRecords());
+        $this->assertSame(AEAT::QR_NO_VERIFACTU_SANDBOX, $settings->getQrCheckUrl());
+    }
+
+    public function test_no_verifactu_production_mode_uses_no_verifactu_qr_url(): void
+    {
+        config()->set('tlt-verifactu.mode', 'no_verifactu');
+        config()->set('tlt-verifactu.production', true);
+
+        $settings = new VerifactuSettings;
+
+        $this->assertSame(AEAT::QR_NO_VERIFACTU_PRODUCTION, $settings->getQrCheckUrl());
     }
 
     public function test_invalid_mode_fails_with_clear_message(): void

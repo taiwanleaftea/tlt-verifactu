@@ -9,6 +9,8 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
  */
 enum InvoiceType: string
 {
+    use EnumValues;
+
     /**
      * Factura (art. 6, 7.2 y 7.3 del RD 1619/2012)
      */

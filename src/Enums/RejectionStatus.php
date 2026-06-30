@@ -9,6 +9,8 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
  */
 enum RejectionStatus: string
 {
+    use EnumValues;
+
     /**
      * No ha habido rechazo previo por la AEAT.
      */

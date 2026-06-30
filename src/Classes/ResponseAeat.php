@@ -21,6 +21,8 @@ class ResponseAeat extends Response
 
     public ?string $rawResponse = null;
 
+    public ?string $csv = null;
+
     public ?EstadoRegistro $status = null;
 
     public ?string $statusRaw = null;

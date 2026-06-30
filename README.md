@@ -259,6 +259,47 @@ if ($result->success) {
 }
 ```
 
+#### Multiple VAT Breakdown Details
+
+Use `invoiceData['breakdown']` when an invoice must generate more than one `DetalleDesglose`. The array can contain
+up to 12 detail rows. When `breakdown` is provided, `base`, `vat`, and `rate` are calculated from the detail rows:
+
+```php
+$invoice = [
+    'number' => '2025/2',
+    'date' => Carbon::createFromFormat('Y-m-d', '2025-01-12'),
+    'description' => 'Invoice description',
+    'type' => InvoiceType::STANDARD,
+    'amount' => 176,
+    'breakdown' => [
+        ['rate' => 21, 'base' => 100, 'vat' => 21],
+        ['rate' => 10, 'base' => 50, 'vat' => 5],
+    ],
+];
+```
+
+#### Register Simplified Invoice
+
+Use `submitSimplifiedInvoice()` for `F2` invoices without recipient identification. The method sets
+`InvoiceType::SIMPLIFIED` internally, so `invoiceData` does not need a `type` key:
+
+```php
+$result = Verifactu::submitSimplifiedInvoice(
+    issuer: $issuer,
+    invoiceData: [
+        'number' => '2025/3',
+        'date' => Carbon::createFromFormat('Y-m-d', '2025-01-12'),
+        'description' => 'Simplified invoice description',
+        'amount' => 12.10,
+        'base' => 10,
+        'vat' => 2.10,
+        'rate' => 21,
+    ],
+    options: [],
+    previous: $previous,
+);
+```
+
 #### Subsanation and Rectification
 
 Use `subsanateInvoice()` when an accepted registry record must be corrected with `Subsanacion=S`. Pass the local

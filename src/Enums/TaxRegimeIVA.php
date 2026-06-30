@@ -6,6 +6,8 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
 
 enum TaxRegimeIVA: string
 {
+    use EnumValues;
+
     // Operación de régimen general.
     case GENERAL = '01';
 

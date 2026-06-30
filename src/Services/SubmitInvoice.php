@@ -144,35 +144,39 @@ class SubmitInvoice
         $desglose = $dom->createElementNS($namespace, 'sf:Desglose');
         $registroAlta->appendChild($desglose);
 
-        // DetalleDesglose, required
-        $detalleDesglose = $dom->createElementNS($namespace, 'sf:DetalleDesglose');
-        $desglose->appendChild($detalleDesglose);
+        $isVatExemptOperation = $invoice->isVatExemptOperation();
 
-        // Impuesto, optional
-        $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:Impuesto', $invoice->getTaxType()));
+        foreach ($invoice->getBreakdownDetails() as $breakdownDetail) {
+            // DetalleDesglose, required
+            $detalleDesglose = $dom->createElementNS($namespace, 'sf:DetalleDesglose');
+            $desglose->appendChild($detalleDesglose);
 
-        // ClaveRegimen, optional
-        $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:ClaveRegimen', $invoice->getTaxRegimeIVA()));
+            // Impuesto, optional
+            $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:Impuesto', $invoice->getTaxType()));
 
-        if (! isset($invoice->exemptOperation)) {
-            // CalificacionOperacion, required
-            $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:CalificacionOperacion', $invoice->getOperationQualification()));
-        } else {
-            // OperacionExenta, required
-            $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:OperacionExenta', $invoice->exemptOperation->value));
-        }
+            // ClaveRegimen, optional
+            $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:ClaveRegimen', $invoice->getTaxRegimeIVA()));
 
-        if (! $invoice->isVatExemptOperation()) {
-            // TipoImpositivo, required for non VAT exempt operations
-            $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:TipoImpositivo', $invoice->getTaxRate()));
-        }
+            if (! isset($invoice->exemptOperation)) {
+                // CalificacionOperacion, required
+                $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:CalificacionOperacion', $invoice->getOperationQualification()));
+            } else {
+                // OperacionExenta, required
+                $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:OperacionExenta', $invoice->exemptOperation->value));
+            }
 
-        // BaseImponibleOimporteNoSujeto
-        $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:BaseImponibleOimporteNoSujeto', $invoice->getTaxableBase()));
+            if (! $isVatExemptOperation) {
+                // TipoImpositivo, required for non VAT exempt operations
+                $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:TipoImpositivo', $breakdownDetail['rate']));
+            }
 
-        if (! $invoice->isVatExemptOperation()) {
-            // CuotaRepercutida, required for non VAT exempt operations
-            $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:CuotaRepercutida', $invoice->getTaxAmount()));
+            // BaseImponibleOimporteNoSujeto
+            $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:BaseImponibleOimporteNoSujeto', $breakdownDetail['base']));
+
+            if (! $isVatExemptOperation) {
+                // CuotaRepercutida, required for non VAT exempt operations
+                $detalleDesglose->appendChild($dom->createElementNS($namespace, 'sf:CuotaRepercutida', $breakdownDetail['vat']));
+            }
         }
 
         // TODO RecargoEquivalencia

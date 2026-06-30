@@ -10,7 +10,7 @@ use Taiwanleaftea\TltVerifactu\Enums\VerifactuMode;
 
 class VerifactuSettings
 {
-    public const string VERSION = '2.2.5';
+    public const string VERSION = '2.3.0';
 
     public const string SYSTEM_ID = '01';
 
@@ -165,6 +165,11 @@ class VerifactuSettings
      */
     public function getQrCheckUrl(): string
     {
-        return $this->production ? AEAT::QR_VERIFICATION_PRODUCTION : AEAT::QR_VERIFICATION_SANDBOX;
+        return match (true) {
+            $this->production && $this->sendsRecordsOnline() => AEAT::QR_VERIFICATION_PRODUCTION,
+            ! $this->production && $this->sendsRecordsOnline() => AEAT::QR_VERIFICATION_SANDBOX,
+            $this->production => AEAT::QR_NO_VERIFACTU_PRODUCTION,
+            default => AEAT::QR_NO_VERIFACTU_SANDBOX,
+        };
     }
 }

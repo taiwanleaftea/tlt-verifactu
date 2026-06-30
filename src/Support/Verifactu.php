@@ -27,6 +27,7 @@ use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Enums\InvoiceType;
 use Taiwanleaftea\TltVerifactu\Enums\OperationQualificationType;
 use Taiwanleaftea\TltVerifactu\Enums\VerifactuRecordType;
+use Taiwanleaftea\TltVerifactu\Enums\VerifactuRecordVariant;
 use Taiwanleaftea\TltVerifactu\Exceptions\CertificateException;
 use Taiwanleaftea\TltVerifactu\Exceptions\GeneratorException;
 use Taiwanleaftea\TltVerifactu\Exceptions\InvoiceValidationException;
@@ -223,6 +224,31 @@ class Verifactu
     }
 
     /**
+     * Generate and either store or submit a RegistroAlta for a factura simplificada (F2) without recipient data.
+     *
+     * @throws CertificateException
+     */
+    public function submitSimplifiedInvoice(
+        LegalPerson $issuer,
+        array $invoiceData,
+        array $options = [],
+        ?array $previous = null,
+        ?Carbon $timestamp = null,
+    ): ResponseAeat {
+        $invoiceData['type'] = InvoiceType::SIMPLIFIED;
+
+        return $this->submitInvoice(
+            issuer: $issuer,
+            invoiceData: $invoiceData,
+            options: $options,
+            operationQualificationType: OperationQualificationType::SUBJECT_DIRECT,
+            previous: $previous,
+            recipient: null,
+            timestamp: $timestamp,
+        );
+    }
+
+    /**
      * Generate and either store or submit a RegistroAlta for a new invoice.
      *
      * @throws CertificateException
@@ -240,25 +266,38 @@ class Verifactu
             $timestamp = Carbon::now();
         }
 
-        $keys = ['number', 'date', 'description', 'type', 'amount', 'base', 'vat', 'rate'];
+        $usesBreakdown = array_key_exists('breakdown', $invoiceData);
+        $keys = $usesBreakdown
+            ? ['number', 'date', 'description', 'type', 'amount']
+            : ['number', 'date', 'description', 'type', 'amount', 'base', 'vat', 'rate'];
+
         if (($key = $this->checkArray($keys, $invoiceData)) !== true) {
             return $this->responseWithErrors('Invoice key '.$key.' is missing.');
         }
 
-        $invoice = new InvoiceSubmission(
-            issuer: $issuer,
-            invoiceNumber: $invoiceData['number'],
-            invoiceDate: $invoiceData['date'],
-            description: $invoiceData['description'],
-            type: $invoiceData['type'],
-            taxRate: $invoiceData['rate'],
-            taxableBase: $invoiceData['base'],
-            taxAmount: $invoiceData['vat'],
-            totalAmount: $invoiceData['amount'],
-            timestamp: $timestamp,
-        );
+        if ($usesBreakdown && ! is_array($invoiceData['breakdown'])) {
+            return $this->responseWithErrors('Invoice breakdown must be an array.');
+        }
 
-        if (! $invoice->isSimplified()) {
+        try {
+            $invoice = new InvoiceSubmission(
+                issuer: $issuer,
+                invoiceNumber: $invoiceData['number'],
+                invoiceDate: $invoiceData['date'],
+                description: $invoiceData['description'],
+                type: $invoiceData['type'],
+                taxRate: (float) ($invoiceData['rate'] ?? 0),
+                taxableBase: (float) ($invoiceData['base'] ?? 0),
+                taxAmount: (float) ($invoiceData['vat'] ?? 0),
+                totalAmount: $invoiceData['amount'],
+                timestamp: $timestamp,
+                breakdown: $usesBreakdown ? $invoiceData['breakdown'] : null,
+            );
+        } catch (InvoiceValidationException $e) {
+            return $this->responseWithErrors('Invoice cannot be validated: '.$e->getMessage());
+        }
+
+        if (! $invoice->isSimplified() && $invoice->type !== InvoiceType::RECTIFICATION_SIMPLIFIED) {
             if (is_null($recipient)) {
                 return $this->responseWithErrors('Recipient object is missing.');
             } else {
@@ -352,12 +391,14 @@ class Verifactu
                 signedXml: $signedXml,
                 signedAt: $signedAt,
                 invoiceType: $invoice->type->value,
+                recordVariant: $this->recordVariantForInvoice($invoice),
                 qrUri: QRCode::buildUrl(
                     issuerNIF: $invoice->issuer->id,
                     invoiceDate: $invoice->invoiceDate,
                     number: $invoice->invoiceNumber,
                     totalAmount: $invoice->totalAmount,
-                    isProduction: $this->settings->isProduction()
+                    isProduction: $this->settings->isProduction(),
+                    isVerifactu: $this->settings->getMode()->sendsRecordsOnline()
                 )
             );
         }
@@ -463,7 +504,8 @@ class Verifactu
                     invoiceDate: $invoice->invoiceDate,
                     number: $invoice->invoiceNumber,
                     totalAmount: $invoice->totalAmount,
-                    isProduction: $this->settings->isProduction()
+                    isProduction: $this->settings->isProduction(),
+                    isVerifactu: $this->settings->getMode()->sendsRecordsOnline()
                 );
             }
 
@@ -472,7 +514,8 @@ class Verifactu
                 invoiceDate: $invoice->invoiceDate,
                 number: $invoice->invoiceNumber,
                 totalAmount: $invoice->totalAmount,
-                isProduction: $this->settings->isProduction()
+                isProduction: $this->settings->isProduction(),
+                isVerifactu: $this->settings->getMode()->sendsRecordsOnline()
             );
             // TODO разобрать все три варианта ответа от VF
         } else {
@@ -504,6 +547,12 @@ class Verifactu
         $response->response = $soapResponse ?? null;
         $response->rawResponse = $soapClient->__getLastResponse();
 
+        if (! $this->shouldStoreAeatRecord($response)) {
+            $response->signedRequest = $signedXml;
+
+            return $response;
+        }
+
         return $this->storeGeneratedRecord(
             invoice: $invoice,
             recordType: VerifactuRecordType::ALTA,
@@ -511,6 +560,7 @@ class Verifactu
             signedXml: $signedXml,
             signedAt: $signedAt,
             invoiceType: $invoice->type->value,
+            recordVariant: $this->recordVariantForInvoice($invoice),
             qrUri: $response->qrURI,
             aeatResponse: $response,
         );
@@ -802,7 +852,14 @@ class Verifactu
         string $number,
         float $totalAmount,
     ): string {
-        return QRCode::SVG($issuerNIF, $invoiceDate, $number, $totalAmount, $this->settings->isProduction());
+        return QRCode::SVG(
+            issuerNIF: $issuerNIF,
+            invoiceDate: $invoiceDate,
+            number: $number,
+            totalAmount: $totalAmount,
+            isProduction: $this->settings->isProduction(),
+            isVerifactu: $this->settings->getMode()->sendsRecordsOnline()
+        );
     }
 
     /**
@@ -816,7 +873,14 @@ class Verifactu
         string $number,
         float $totalAmount,
     ): string {
-        return QRCode::PNG($issuerNIF, $invoiceDate, $number, $totalAmount, $this->settings->isProduction());
+        return QRCode::PNG(
+            issuerNIF: $issuerNIF,
+            invoiceDate: $invoiceDate,
+            number: $number,
+            totalAmount: $totalAmount,
+            isProduction: $this->settings->isProduction(),
+            isVerifactu: $this->settings->getMode()->sendsRecordsOnline()
+        );
     }
 
     /**
@@ -828,7 +892,14 @@ class Verifactu
         string $number,
         float $totalAmount,
     ): string {
-        return QRCode::buildUrl($issuerNIF, $invoiceDate, $number, $totalAmount, $this->settings->isProduction());
+        return QRCode::buildUrl(
+            issuerNIF: $issuerNIF,
+            invoiceDate: $invoiceDate,
+            number: $number,
+            totalAmount: $totalAmount,
+            isProduction: $this->settings->isProduction(),
+            isVerifactu: $this->settings->getMode()->sendsRecordsOnline()
+        );
     }
 
     /**
@@ -847,6 +918,19 @@ class Verifactu
         return $response;
     }
 
+    private function recordVariantForInvoice(InvoiceSubmission $invoice): VerifactuRecordVariant
+    {
+        if ($invoice->getOption('subsanacion') !== null) {
+            return VerifactuRecordVariant::SUBSANACION;
+        }
+
+        if ($invoice->isRectificado()) {
+            return VerifactuRecordVariant::RECTIFICATIVA;
+        }
+
+        return VerifactuRecordVariant::STANDARD;
+    }
+
     private function storeGeneratedRecord(
         Invoice $invoice,
         VerifactuRecordType $recordType,
@@ -854,6 +938,7 @@ class Verifactu
         ?string $signedXml = null,
         ?Carbon $signedAt = null,
         ?string $invoiceType = null,
+        ?VerifactuRecordVariant $recordVariant = null,
         ?string $qrUri = null,
         ?ResponseAeat $aeatResponse = null,
     ): ResponseAeat {
@@ -864,6 +949,7 @@ class Verifactu
         $hash = $invoice->hash();
         $previousHash = $invoice->previousHash ?: null;
         $registryScope = $this->settings->getRegistryScope();
+        $recipient = $this->invoiceRecipientPayload($invoice);
         $signatureMetadata = [];
 
         if ($signedXml !== null) {
@@ -890,7 +976,12 @@ class Verifactu
             'invoice_number' => $invoice->invoiceNumber,
             'invoice_date' => $invoice->invoiceDate->format('Y-m-d'),
             'record_type' => $recordType->value,
+            'record_variant' => $recordVariant?->value,
             'invoice_type' => $invoiceType,
+            'recipient_name' => $recipient['name'] ?? null,
+            'recipient_id' => $recipient['id'] ?? null,
+            'recipient_country_code' => $recipient['country_code'] ?? null,
+            'recipient_id_type' => $recipient['id_type'] ?? null,
             'status' => $this->storedRecordStatus($signedXml, $aeatResponse),
             'estado_envio' => $this->estadoEnvioFromResponse($aeatResponse),
             'estado_registro' => $aeatResponse?->status?->value ?? $aeatResponse?->statusRaw,
@@ -898,7 +989,7 @@ class Verifactu
             'previous_hash' => $previousHash,
             'request_xml' => $requestXml,
             'signed_xml' => $signedXml,
-            'invoice_payload' => $this->invoicePayload($invoice),
+            'invoice_payload' => $this->invoicePayload($invoice, $recipient),
             'signed_at' => $signedAt,
             'signature_format' => $signatureMetadata['signature_format'] ?? null,
             'signature_algorithm' => $signatureMetadata['signature_algorithm'] ?? null,
@@ -1046,20 +1137,32 @@ class Verifactu
         return implode(PHP_EOL, $response->errors);
     }
 
+    private function shouldStoreAeatRecord(ResponseAeat $response): bool
+    {
+        if (in_array($response->status, [EstadoRegistro::ACCEPTED, EstadoRegistro::ACCEPTED_ERRORES], true)) {
+            return true;
+        }
+
+        if ($response->status === EstadoRegistro::NOT_ACCEPTED) {
+            return false;
+        }
+
+        return $response->success;
+    }
+
     /**
-     * @return array<string, mixed>|null
+     * @return array{name: string, id: string, country_code: string, id_type: string}|null
      */
-    private function invoicePayload(Invoice $invoice): ?array
+    private function invoiceRecipientPayload(Invoice $invoice): ?array
     {
         if (! $invoice instanceof InvoiceSubmission) {
             return null;
         }
 
-        $recipient = null;
-
         try {
             $invoiceRecipient = $invoice->getRecipient();
-            $recipient = [
+
+            return [
                 'name' => $invoiceRecipient->name,
                 'id' => $invoiceRecipient->id,
                 'country_code' => $invoiceRecipient->countryCode,
@@ -1067,6 +1170,19 @@ class Verifactu
             ];
         } catch (RecipientException) {
             // Simplified invoices do not carry recipient data.
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array{name: string, id: string, country_code: string, id_type: string}|null  $recipient
+     * @return array<string, mixed>|null
+     */
+    private function invoicePayload(Invoice $invoice, ?array $recipient): ?array
+    {
+        if (! $invoice instanceof InvoiceSubmission) {
+            return null;
         }
 
         return [
@@ -1084,6 +1200,7 @@ class Verifactu
                 'tax_amount' => (float) $invoice->getTaxAmount(),
                 'total_amount' => (float) $invoice->getTotalAmount(),
                 'tax_rate' => (float) $invoice->getTaxRate(),
+                'breakdown' => $invoice->getBreakdownPayload(),
             ],
             'tax' => [
                 'operation_qualification' => isset($invoice->exemptOperation) ? null : $this->invoicePayloadOperationQualification($invoice),
@@ -1145,6 +1262,7 @@ class Verifactu
         $base = $this->negativePayloadAmount($invoicePayload['taxable_base'] ?? null);
         $tax = $this->negativePayloadAmount($invoicePayload['tax_amount'] ?? null) ?? 0.0;
         $total = $this->negativePayloadAmount($invoicePayload['total_amount'] ?? null);
+        $breakdown = $this->negativePayloadBreakdown($invoicePayload['breakdown'] ?? null);
 
         if ($base === null || $total === null) {
             return $this->responseWithErrors('Rectified registry record invoice_payload does not contain invoice amounts.');
@@ -1164,7 +1282,7 @@ class Verifactu
             'base' => $base,
             'vat' => $tax,
             'rate' => $this->payloadAmount($invoicePayload['tax_rate'] ?? null) ?? 0.0,
-        ], $invoiceData ?? []);
+        ] + ($breakdown === null ? [] : ['breakdown' => $breakdown]), $invoiceData ?? []);
 
         $validated = $this->validateRectificationInvoiceData($data);
 
@@ -1252,6 +1370,40 @@ class Verifactu
         $amount = $this->payloadAmount($value);
 
         return $amount === null ? null : -abs($amount);
+    }
+
+    /**
+     * @return array<int, array{rate: float, base: float, vat: float}>|null
+     */
+    private function negativePayloadBreakdown(mixed $value): ?array
+    {
+        if (! is_array($value) || $value === []) {
+            return null;
+        }
+
+        $breakdown = [];
+
+        foreach ($value as $detail) {
+            if (! is_array($detail)) {
+                return null;
+            }
+
+            $rate = $this->payloadAmount($detail['rate'] ?? $detail['tax_rate'] ?? null);
+            $base = $this->negativePayloadAmount($detail['base'] ?? $detail['taxable_base'] ?? null);
+            $vat = $this->negativePayloadAmount($detail['vat'] ?? $detail['tax_amount'] ?? null);
+
+            if ($rate === null || $base === null || $vat === null) {
+                return null;
+            }
+
+            $breakdown[] = [
+                'rate' => $rate,
+                'base' => $base,
+                'vat' => $vat,
+            ];
+        }
+
+        return $breakdown;
     }
 
     private function payloadAmount(mixed $value): ?float

@@ -6,17 +6,8 @@ namespace Taiwanleaftea\TltVerifactu\Enums;
 
 enum VerifactuRecordType: string
 {
+    use EnumValues;
+
     case ALTA = 'alta';
     case ANULACION = 'anulacion';
-
-    /**
-     * @return list<string>
-     */
-    public static function values(): array
-    {
-        return array_map(
-            static fn (self $type): string => $type->value,
-            self::cases()
-        );
-    }
 }

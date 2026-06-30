@@ -2,11 +2,29 @@
 
 All notable changes to `tlt-verifactu` will be documented in this file.
 
-## 2.2.5 - 2026-06-26
+## 2.3.0 - 2026-06-30
 
 ### Added
 
-- Add `ResponseAeat::$registryRecord` while keeping `registryRecordId` for backward compatibility.
+- Add multiple VAT breakdown detail support through `invoiceData['breakdown']`, including XML generation for multiple `DetalleDesglose` nodes and a 12-detail validation limit.
+- Add `submitSimplifiedInvoice()` helper for `F2` invoices without recipient data.
+- Add `VerifactuRecordVariant` and store each registry row as `standard`, `subsanacion`, or `rectificativa`.
+- Add recipient columns and casts to the local registry table/model (`recipient_name`, `recipient_id`, `recipient_country_code`, `recipient_id_type`).
+- Add `ResponseAeat::$csv` and keep registry model access through `ResponseAeat::$registryRecord`.
+- Add NO VERIFACTU QR verification endpoints for sandbox and production.
+- Add shared `EnumValues` trait to all enum classes.
+
+### Changed
+
+- Store recipient data, registry variants, and VAT breakdown details in `verifactu_records.invoice_payload`.
+- Preserve VAT breakdown details when building difference rectification invoices from a stored registry payload.
+- Generate QR URLs with the correct VERIFACTU or NO VERIFACTU endpoint and RFC 3986 query encoding.
+
+### Fixed
+
+- Do not store rejected online `RegistroAlta` responses (`EstadoRegistro=Incorrecto`) in `verifactu_records`, avoiding local chain links to records that AEAT did not accept.
+- Allow simplified rectification invoices (`R5`) to be submitted without recipient data.
+- Use NO VERIFACTU QR verification URLs when no VERIFACTU mode is active.
 
 ## 2.2.4 - 2026-06-26
 
