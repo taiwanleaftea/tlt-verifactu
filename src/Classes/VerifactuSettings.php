@@ -10,7 +10,7 @@ use Taiwanleaftea\TltVerifactu\Enums\VerifactuMode;
 
 class VerifactuSettings
 {
-    public const string VERSION = '2.3.0';
+    public const string VERSION = '2.3.1';
 
     public const string SYSTEM_ID = '01';
 

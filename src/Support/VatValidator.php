@@ -31,22 +31,22 @@ class VatValidator
             return $response;
         }
 
+        // SOAP reads and WSDL downloads use the PHP socket timeout as well.
+        $previousTimeout = ini_set('default_socket_timeout', (string) max(1, (int) config('tlt-verifactu.vies.read_timeout', 10)));
+
         try {
             $client = $this->createSoapClient(VIES::EU_VAT_API_URL.VIES::EU_VAT_WSDL_ENDPOINT);
-        } catch (SoapClientException $e) {
-            $errors[] = $e->getMessage();
-        }
-
-        if (isset($client)) {
             $query = [
                 'countryCode' => Str::upper($country),
                 'vatNumber' => $this->sanitize($country, $vatNumber),
             ];
 
-            try {
-                $soapResponse = $client->checkVat($query);
-            } catch (SoapFault $e) {
-                $errors[] = $e->getMessage();
+            $soapResponse = $client->checkVat($query);
+        } catch (SoapClientException|SoapFault $e) {
+            $errors[] = $e->getMessage();
+        } finally {
+            if ($previousTimeout !== false) {
+                ini_set('default_socket_timeout', $previousTimeout);
             }
         }
 
@@ -103,6 +103,12 @@ class VatValidator
      */
     protected function createSoapClient(string $wsdl): SoapClient
     {
-        return Soap::createClient($wsdl);
+        return Soap::createClient($wsdl, [
+            'location' => VIES::EU_VAT_API_URL.VIES::EU_VAT_SERVICE_ENDPOINT,
+            'connection_timeout' => max(1, (int) config('tlt-verifactu.vies.connect_timeout', 5)),
+            'stream_context' => stream_context_create([
+                'http' => ['timeout' => max(1, (int) config('tlt-verifactu.vies.read_timeout', 10))],
+            ]),
+        ]);
     }
 }

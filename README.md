@@ -136,6 +136,29 @@ $result = Verifactu::cancelInvoice(record: $invoice->verifactu_record_id);
 `cancelInvoiceByRecordId()` remains as a backward-compatible alias. `cancelInvoice()` also accepts explicit
 `sin_registro_previo` and `rechazo_previo` options for documented `RegistroAnulacion` edge cases.
 
+### AEAT SOAP Timeouts
+
+Online registration and cancellation use separate connection and read timeouts, defaulting to
+5 and 20 seconds respectively:
+
+```dotenv
+AEAT_CONNECT_TIMEOUT=5
+AEAT_READ_TIMEOUT=20
+```
+
+The config keys are `tlt-verifactu.aeat.connect_timeout` and `tlt-verifactu.aeat.read_timeout`.
+Values below one second are clamped to one second. Defaults also apply if a previously published
+config file does not contain these keys. The read timeout covers WSDL loading and waiting for
+the SOAP response; these are per-operation limits, not a total deadline for the submission.
+PHP's `default_socket_timeout` is temporarily set for the SOAP exchange and restored afterwards,
+including when an exception occurs. Set the limits below your web server's gateway timeout,
+allowing time for WSDL downloads, signing and local processing.
+
+SOAP failures return `success = false` with details in `errors`, using the existing error handling.
+A timeout after sending does not prove that AEAT rejected the record: the remote result may be unknown.
+No automatic retries or duplicate reconciliation are performed. These settings do not affect VIES,
+offline records or the system's IPv4/IPv6 preference.
+
 ### Local Registry Database
 
 The package provides a `verifactu_records` table for local registry storage. It stores:
@@ -159,6 +182,21 @@ The `Taiwanleaftea\TltVerifactu\Models\VerifactuRecord` Eloquent model is availa
 ## Usage
 
 ### VAT Number Validator
+
+VIES validation uses SOAP over HTTPS. Connection and read timeouts default to 5 and 10 seconds,
+respectively, and can be configured independently:
+
+```dotenv
+VIES_CONNECT_TIMEOUT=5
+VIES_READ_TIMEOUT=10
+```
+
+The corresponding config keys are `tlt-verifactu.vies.connect_timeout` and
+`tlt-verifactu.vies.read_timeout`. Values below one second are clamped to one second.
+The read timeout also applies when downloading the WSDL. These are per-operation timeouts,
+not a total deadline for the entire validation. Connection and SOAP failures return
+`success = false` with details in `errors`; they do not mean that the VAT number is invalid.
+These settings do not affect AEAT requests or change the system's IPv4/IPv6 preference.
 
 ```php
 use Taiwanleaftea\TltVerifactu\Support\Facades\VatValidator;

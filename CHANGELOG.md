@@ -2,6 +2,24 @@
 
 All notable changes to `tlt-verifactu` will be documented in this file.
 
+## 2.3.1 - 2026-10-08
+
+### Added
+
+- Add configurable VIES SOAP connection and read timeouts through `VIES_CONNECT_TIMEOUT` and `VIES_READ_TIMEOUT`, defaulting to 5 and 10 seconds.
+- Add independent AEAT SOAP connection and read timeouts through `AEAT_CONNECT_TIMEOUT` and `AEAT_READ_TIMEOUT`, defaulting to 5 and 20 seconds, for online registration and cancellation.
+- Add regression tests for timeout configuration, defaults, minimum values, SOAP failures, and restoration of PHP socket settings.
+
+### Changed
+
+- Use the official VIES WSDL path and explicitly send VAT validation requests to the HTTPS SOAP endpoint instead of the HTTP location embedded in the WSDL.
+- Document per-operation timeout limits and clarify that an AEAT timeout after sending does not confirm rejection; automatic retries and duplicate reconciliation are not performed.
+
+### Fixed
+
+- Limit socket waits during WSDL loading and SOAP calls, clamp timeout values to at least one second, and restore `default_socket_timeout` after success or exceptions.
+- Preserve default timeout values when previously published configuration files do not contain the new VIES or AEAT settings.
+
 ## 2.3.0 - 2026-06-30
 
 ### Added

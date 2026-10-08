@@ -4,6 +4,18 @@ use Taiwanleaftea\TltVerifactu\Enums\IdType;
 use Taiwanleaftea\TltVerifactu\Enums\VerifactuMode;
 
 return [
+    // AEAT SOAP timeouts in seconds, independent of VIES validation.
+    'aeat' => [
+        'connect_timeout' => (int) env('AEAT_CONNECT_TIMEOUT', 5),
+        'read_timeout' => (int) env('AEAT_READ_TIMEOUT', 20),
+    ],
+
+    // VIES SOAP timeouts in seconds; these do not apply to AEAT requests.
+    'vies' => [
+        'connect_timeout' => (int) env('VIES_CONNECT_TIMEOUT', 5),
+        'read_timeout' => (int) env('VIES_READ_TIMEOUT', 10),
+    ],
+
     // "online" sends records to AEAT and stores them locally.
     // "no_verifactu" stores signed records without online submission.
     'mode' => env('VERIFACTU_MODE', VerifactuMode::ONLINE->value),

@@ -2,16 +2,21 @@
 
 namespace Taiwanleaftea\TltVerifactu\Test\Verifactu;
 
+use Closure;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Orchestra\Testbench\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 use SoapClient;
+use SoapFault;
 use Taiwanleaftea\TltVerifactu\Classes\Certificate;
 use Taiwanleaftea\TltVerifactu\Classes\LegalPerson;
 use Taiwanleaftea\TltVerifactu\Classes\Recipient;
+use Taiwanleaftea\TltVerifactu\Classes\ResponseAeat;
 use Taiwanleaftea\TltVerifactu\Classes\VerifactuSettings;
 use Taiwanleaftea\TltVerifactu\Constants\AEAT;
 use Taiwanleaftea\TltVerifactu\Enums\EstadoRegistro;
@@ -233,6 +238,132 @@ class OnlineRegistryModeTest extends TestCase
         $this->assertSame(0, DB::table('verifactu_records')->count());
     }
 
+    #[DataProvider('soapTimeoutCases')]
+    public function test_aeat_timeouts_apply_to_wsdl_and_call_and_are_always_restored(
+        string $operation,
+        ?array $timeouts,
+        int $expectedConnect,
+        int $expectedRead,
+        string $outcome,
+    ): void {
+        config()->set('tlt-verifactu.aeat', $timeouts ?? []);
+        config()->set('tlt-verifactu.vies', ['connect_timeout' => 9, 'read_timeout' => 11]);
+        $originalTimeout = ini_set('default_socket_timeout', '83');
+        $creationCount = 0;
+
+        $soapClient = new FakeVerifactuSoapClient((object) [
+            'EstadoEnvio' => 'Correcto',
+            'RespuestaLinea' => (object) ['EstadoRegistro' => EstadoRegistro::ACCEPTED->value],
+        ]);
+        $soapClient->onCreate = function (array $options) use (&$creationCount, $expectedConnect, $expectedRead, $outcome): void {
+            $creationCount++;
+            $this->assertSame((string) $expectedRead, ini_get('default_socket_timeout'));
+            $this->assertSame($expectedConnect, $options['connection_timeout']);
+            $this->assertSame($expectedRead, stream_context_get_options($options['stream_context'])['http']['timeout']);
+            $this->assertTrue($options['exceptions']);
+            $this->assertNotEmpty($options['local_cert']);
+            $this->assertSame('secret', $options['passphrase']);
+
+            if ($outcome === 'creation_fault') {
+                throw new SoapClientException('WSDL timed out');
+            }
+
+            if ($outcome === 'unexpected_creation_error') {
+                throw new RuntimeException('Unexpected SOAP error');
+            }
+        };
+        $soapClient->onCall = function () use ($expectedRead, $outcome): void {
+            $this->assertSame((string) $expectedRead, ini_get('default_socket_timeout'));
+
+            if ($outcome === 'call_fault') {
+                throw new SoapFault('HTTP', 'Error Fetching http headers');
+            }
+
+            if ($outcome === 'unexpected_call_error') {
+                throw new RuntimeException('Unexpected SOAP error');
+            }
+        };
+
+        try {
+            try {
+                $response = $this->sendForTimeoutTest($this->configuredVerifactu($soapClient), $operation);
+                $this->assertNotContains($outcome, ['unexpected_creation_error', 'unexpected_call_error']);
+                $this->assertSame($outcome === 'success', $response->success);
+
+                if ($outcome === 'creation_fault') {
+                    $this->assertSame(['SOAP client error: WSDL timed out'], $response->errors);
+                } elseif ($outcome === 'call_fault') {
+                    $this->assertSame('SOAP call failed: Error Fetching http headers', $response->errors[0]);
+                    $this->assertStringContainsString('<sfLR:RegFactuSistemaFacturacion', (string) $response->request);
+                }
+
+                $initialRecords = $operation === 'cancellation' ? 1 : 0;
+                $this->assertSame($initialRecords + ($outcome === 'success' ? 1 : 0), DB::table('verifactu_records')->count());
+            } catch (RuntimeException $e) {
+                $this->assertContains($outcome, ['unexpected_creation_error', 'unexpected_call_error']);
+                $this->assertSame('Unexpected SOAP error', $e->getMessage());
+            }
+
+            $this->assertSame('83', ini_get('default_socket_timeout'));
+            $this->assertSame(1, $creationCount);
+            $this->assertCount(in_array($outcome, ['creation_fault', 'unexpected_creation_error'], true) ? 0 : 1, $soapClient->calls);
+        } finally {
+            if ($originalTimeout !== false) {
+                ini_set('default_socket_timeout', $originalTimeout);
+            }
+        }
+    }
+
+    public static function soapTimeoutCases(): iterable
+    {
+        foreach (['registration', 'cancellation'] as $operation) {
+            yield $operation.' defaults' => [$operation, null, 5, 20, 'success'];
+            yield $operation.' configured' => [$operation, ['connect_timeout' => 3, 'read_timeout' => 7], 3, 7, 'success'];
+            yield $operation.' minimum' => [$operation, ['connect_timeout' => 0, 'read_timeout' => -1], 1, 1, 'success'];
+
+            foreach (['creation_fault', 'call_fault', 'unexpected_creation_error', 'unexpected_call_error'] as $outcome) {
+                yield $operation.' '.$outcome => [$operation, ['connect_timeout' => 3, 'read_timeout' => 7], 3, 7, $outcome];
+            }
+        }
+    }
+
+    private function sendForTimeoutTest(Verifactu $verifactu, string $operation): ResponseAeat
+    {
+        if ($operation === 'cancellation') {
+            $recordId = DB::table('verifactu_records')->insertGetId([
+                'issuer_nif' => '89890001K',
+                'issuer_name' => 'Issuer Name',
+                'invoice_number' => 'A-1',
+                'invoice_date' => '2026-01-01',
+                'record_type' => 'alta',
+                'status' => 'accepted',
+                'hash' => str_repeat('A', 64),
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ]);
+
+            return $verifactu->cancelInvoice(record: (int) $recordId, timestamp: Carbon::parse('2026-01-01T10:01:00+01:00'));
+        }
+
+        return $verifactu->submitInvoice(
+            issuer: new LegalPerson('Issuer Name', '89890001K'),
+            invoiceData: [
+                'number' => 'A-1',
+                'date' => Carbon::parse('2026-01-01'),
+                'description' => 'Invoice description',
+                'type' => InvoiceType::STANDARD,
+                'amount' => 121,
+                'base' => 100,
+                'vat' => 21,
+                'rate' => 21,
+            ],
+            options: [],
+            operationQualificationType: OperationQualificationType::SUBJECT_DIRECT,
+            recipient: new Recipient('Buyer Name', '12345678L', 'ES', IdType::NIF),
+            timestamp: Carbon::parse('2026-01-01T10:00:00+01:00'),
+        );
+    }
+
     private function configuredVerifactu(FakeVerifactuSoapClient $soapClient): FakeOnlineRegistryVerifactu
     {
         Storage::fake('local');
@@ -276,6 +407,7 @@ class FakeOnlineRegistryVerifactu extends Verifactu
     {
         $this->soapClient->wsdl = $wsdl;
         $this->soapClient->options = $options;
+        $this->soapClient->onCreate?->__invoke($options);
 
         return $this->soapClient;
     }
@@ -300,6 +432,10 @@ class FakeVerifactuSoapClient extends SoapClient
 
     public array $options = [];
 
+    public ?Closure $onCreate = null;
+
+    public ?Closure $onCall = null;
+
     public function __construct(private object $response) {}
 
     public function __soapCall(string $name, array $args, ?array $options = null, $inputHeaders = null, &$outputHeaders = null): mixed
@@ -308,6 +444,8 @@ class FakeVerifactuSoapClient extends SoapClient
             'name' => $name,
             'args' => $args,
         ];
+
+        $this->onCall?->__invoke();
 
         return $this->response;
     }

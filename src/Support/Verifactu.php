@@ -452,6 +452,7 @@ class Verifactu
 
         $finalXml = $submission->sanitizeXml($envelopedDom);
 
+        $readTimeout = max(1, (int) config('tlt-verifactu.aeat.read_timeout', 20));
         $soapOptions = [
             'location' => $this->settings->getVerifactuServiceUrl(),
             'trace' => 1,
@@ -459,27 +460,37 @@ class Verifactu
             'local_cert' => $this->certificate->generatePem(),
             'passphrase' => $this->certificate->getPassword(),
             'cache_wsdl' => WSDL_CACHE_NONE,
+            'connection_timeout' => max(1, (int) config('tlt-verifactu.aeat.connect_timeout', 5)),
+            'stream_context' => stream_context_create(['http' => ['timeout' => $readTimeout]]),
         ];
 
-        try {
-            $soapClient = $this->createSoapClient($this->settings->getVerifactuWsdlUrl(), $soapOptions);
-        } catch (SoapClientException $e) {
-            return $this->responseWithErrors('SOAP client error: '.$e->getMessage());
-        }
-
-        $soapVar = new SoapVar($finalXml, XSD_ANYXML);
+        $previousTimeout = ini_set('default_socket_timeout', (string) $readTimeout);
 
         try {
-            $soapResponse = $soapClient->__soapCall('RegFactuSistemaFacturacion', [$soapVar]);
-        } catch (SoapFault $e) {
-            $errors = [];
-            $errors[] = 'SOAP call failed: '.$e->getMessage();
-            $errors[] = 'XML sent: '.PHP_EOL.$finalXml;
-            $errors[] = 'Last SOAP call: '.$soapClient->__getLastRequest();
-            $errors[] = 'Last SOAP response: '.$soapClient->__getLastResponse();
-            $errors[] = 'Last request header: '.$soapClient->__getLastRequestHeaders();
+            try {
+                $soapClient = $this->createSoapClient($this->settings->getVerifactuWsdlUrl(), $soapOptions);
+            } catch (SoapClientException $e) {
+                return $this->responseWithErrors('SOAP client error: '.$e->getMessage());
+            }
 
-            return $this->responseWithErrors($errors, ['request' => $finalXml]);
+            $soapVar = new SoapVar($finalXml, XSD_ANYXML);
+
+            try {
+                $soapResponse = $soapClient->__soapCall('RegFactuSistemaFacturacion', [$soapVar]);
+            } catch (SoapFault $e) {
+                $errors = [];
+                $errors[] = 'SOAP call failed: '.$e->getMessage();
+                $errors[] = 'XML sent: '.PHP_EOL.$finalXml;
+                $errors[] = 'Last SOAP call: '.$soapClient->__getLastRequest();
+                $errors[] = 'Last SOAP response: '.$soapClient->__getLastResponse();
+                $errors[] = 'Last request header: '.$soapClient->__getLastRequestHeaders();
+
+                return $this->responseWithErrors($errors, ['request' => $finalXml]);
+            }
+        } finally {
+            if ($previousTimeout !== false) {
+                ini_set('default_socket_timeout', $previousTimeout);
+            }
         }
 
         $response = new ResponseAeat;
@@ -759,6 +770,7 @@ class Verifactu
 
         $finalXml = $cancellation->sanitizeXml($envelopedDom);
 
+        $readTimeout = max(1, (int) config('tlt-verifactu.aeat.read_timeout', 20));
         $soapOptions = [
             'location' => $this->settings->getVerifactuServiceUrl(),
             'trace' => 1,
@@ -766,27 +778,37 @@ class Verifactu
             'local_cert' => $this->certificate->generatePem(),
             'passphrase' => $this->certificate->getPassword(),
             'cache_wsdl' => WSDL_CACHE_NONE,
+            'connection_timeout' => max(1, (int) config('tlt-verifactu.aeat.connect_timeout', 5)),
+            'stream_context' => stream_context_create(['http' => ['timeout' => $readTimeout]]),
         ];
 
-        try {
-            $soapClient = $this->createSoapClient($this->settings->getVerifactuWsdlUrl(), $soapOptions);
-        } catch (SoapClientException $e) {
-            return $this->responseWithErrors('SOAP client error: '.$e->getMessage());
-        }
-
-        $soapVar = new SoapVar($finalXml, XSD_ANYXML);
+        $previousTimeout = ini_set('default_socket_timeout', (string) $readTimeout);
 
         try {
-            $soapResponse = $soapClient->__soapCall('RegFactuSistemaFacturacion', [$soapVar]);
-        } catch (SoapFault $e) {
-            $errors = [];
-            $errors[] = 'SOAP call failed: '.$e->getMessage();
-            $errors[] = 'XML sent: '.PHP_EOL.$finalXml;
-            $errors[] = 'Last SOAP call: '.$soapClient->__getLastRequest();
-            $errors[] = 'Last SOAP response: '.$soapClient->__getLastResponse();
-            $errors[] = 'Last request header: '.$soapClient->__getLastRequestHeaders();
+            try {
+                $soapClient = $this->createSoapClient($this->settings->getVerifactuWsdlUrl(), $soapOptions);
+            } catch (SoapClientException $e) {
+                return $this->responseWithErrors('SOAP client error: '.$e->getMessage());
+            }
 
-            return $this->responseWithErrors($errors, ['request' => $finalXml]);
+            $soapVar = new SoapVar($finalXml, XSD_ANYXML);
+
+            try {
+                $soapResponse = $soapClient->__soapCall('RegFactuSistemaFacturacion', [$soapVar]);
+            } catch (SoapFault $e) {
+                $errors = [];
+                $errors[] = 'SOAP call failed: '.$e->getMessage();
+                $errors[] = 'XML sent: '.PHP_EOL.$finalXml;
+                $errors[] = 'Last SOAP call: '.$soapClient->__getLastRequest();
+                $errors[] = 'Last SOAP response: '.$soapClient->__getLastResponse();
+                $errors[] = 'Last request header: '.$soapClient->__getLastRequestHeaders();
+
+                return $this->responseWithErrors($errors, ['request' => $finalXml]);
+            }
+        } finally {
+            if ($previousTimeout !== false) {
+                ini_set('default_socket_timeout', $previousTimeout);
+            }
         }
 
         $response = new ResponseAeat;
